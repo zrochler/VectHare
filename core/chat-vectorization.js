@@ -464,7 +464,8 @@ export async function synchronizeChat(settings, batchSize = 5) {
                 text,
                 hash: getStringHash(substituteParams(getTextWithoutAttachments(msg))),
                 index: i,
-                is_user: msg.is_user
+                is_user: msg.is_user,
+                name: msg.name,
             });
         }
 
