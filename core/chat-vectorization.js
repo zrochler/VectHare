@@ -156,7 +156,7 @@ function groupMessagesByStrategy(messages, strategy, batchSize = 4, keywordLevel
             let i = 0;
             while (i < messages.length) {
                 if (!messages[i].is_user && messages[i].name == 'Summary') {
-                    console.log(`[VectHare Chunking] Found summary message at index ${i}, treating as separate chunk.`);
+                    console.log(`[VectHare Chat Vectorization] Found summary message at index ${i}, treating as separate chunk.`);
                     const text = messages[i].text || messages[i].mes || '';
                     grouped.push({
                         text,
