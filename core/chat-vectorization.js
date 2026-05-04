@@ -154,7 +154,10 @@ function groupMessagesByStrategy(messages, strategy, batchSize = 4, keywordLevel
             // Group user + AI message pairs
             const grouped = [];
             let i = 0;
+            console.log(`[VectHare Chunking] Grouping messages by conversation turns with batch size 2. Total messages: ${messages.length}`);
             while (i < messages.length) {
+                console.log(`[VectHare Chunking] Processing message index ${i}:`, messages[i]);
+
                 if (!messages[i].is_user && messages[i].name == 'Summary') {
                     console.log(`[VectHare Chunking] Found summary message at index ${i}, treating as separate chunk.`);
                     const text = messages[i].text || messages[i].mes || '';
