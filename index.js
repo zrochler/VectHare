@@ -121,7 +121,7 @@ const defaultSettings = {
     temporal_decay: getDefaultDecaySettings(),
 
     // Global defaults for new collections
-    default_decay_enabled: false,    // Whether new collections have temporal weighting enabled
+    default_decay_enabled: true,    // Whether new collections have temporal weighting enabled
     default_decay_type: 'decay',     // 'decay' or 'nostalgia' for new collections
 
     // RAG Prompt Context (Global level)
