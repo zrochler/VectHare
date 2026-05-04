@@ -153,7 +153,25 @@ function groupMessagesByStrategy(messages, strategy, batchSize = 4, keywordLevel
         case 'conversation_turns': {
             // Group user + AI message pairs
             const grouped = [];
-            for (let i = 0; i < messages.length; i += 2) {
+            let i = 0;
+            while (i < messages.length) {
+                if (!messages[i].is_user && messages[i].name == 'Summary') {
+                    console.log(`[VectHare Chunking] Found summary message at index ${i}, treating as separate chunk.`);
+                    const text = messages[i].text || messages[i].mes || '';
+                    grouped.push({
+                        text,
+                        hash: getStringHash(text),
+                        index: messages[i].index ?? messages[i].id,
+                        keywords: getKeywords(text),
+                        metadata: {
+                            speaker: '[Summary]',
+                            isUser: false,
+                            messageId: messages[i].index ?? messages[i].id,
+                        },
+                    });
+                    i += 1;
+                    continue;
+                }
                 const pair = [messages[i]];
                 if (i + 1 < messages.length) {
                     pair.push(messages[i + 1]);
@@ -177,6 +195,7 @@ function groupMessagesByStrategy(messages, strategy, batchSize = 4, keywordLevel
                         endIndex: pair[pair.length - 1].index
                     }
                 });
+                i += 2;
             }
             return grouped;
         }
