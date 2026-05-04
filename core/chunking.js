@@ -123,19 +123,20 @@ const STRATEGIES = {
         while (i < messages.length) {
         // for (let i = 0; i < messages.length; i += 2) {
             if(!messages[i].is_user && messages[i].name == 'Summary') {
+                console.log(`[Chunking] Found summary message at index ${i}, treating as separate chunk.`);
                 // If we encounter a summary, treat it as its own chunk and skip pairing
                 const text = messages[i].text || messages[i].mes || '';
                 chunks.push({
                     text,
                     metadata: {
-                        speaker: 'Summary',
+                        speaker: '[Summary]',
                         isUser: false,
                         messageId: messages[i].index ?? messages[i].id,
                     },
                 });
                 i += 1; // Move to the next message after the summary
-                continue;
             }
+            else {
             const pair = [messages[i]];
             if (i + 1 < messages.length) {
                 pair.push(messages[i + 1]);
@@ -158,6 +159,7 @@ const STRATEGIES = {
                 },
             });
             i += 2;
+        }
         }
         return chunks;
     },
