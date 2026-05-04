@@ -122,7 +122,7 @@ const STRATEGIES = {
         let i = 0;
         while (i < messages.length) {
         // for (let i = 0; i < messages.length; i += 2) {
-        console.log(`[VectHare Chunking] Processing message index ${i}:`, messages[i]);
+        // "extra":{"ILS_Data":{"OriginalMessages":[...
         if(!messages[i].is_user && messages[i].name == 'Summary') {
                 console.log(`[VectHare Chunking] Found summary message at index ${i}, treating as separate chunk.`);
                 // If we encounter a summary, treat it as its own chunk and skip pairing
