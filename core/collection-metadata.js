@@ -10,7 +10,7 @@
  */
 
 import { extension_settings } from '../../../../extensions.js';
-import { saveSettingsDebounced } from '../../../../../script.js';
+import { saveSettingsDebounced, getCurrentChatId } from '../../../../../script.js';
 import { parseRegistryKey } from './collection-ids.js';
 
 // ============================================================================
@@ -922,7 +922,7 @@ export async function shouldCollectionActivate(collectionId, context) {
     }
 
     // Priority 2.5: Check if locked to current chat (overrides other conditions)
-    const currentChatId = context?.currentChatId;
+    const currentChatId = getCurrentChatId();
     console.log(`[VectHare Activation Filter] Collection ${collectionId}: Checking chat lock (${currentChatId})`);
     if (currentChatId && isCollectionLockedToChat(collectionId, currentChatId)) {
         console.log(`[VectHare Activation Filter] Collection ${collectionId}: ✓ LOCKED_TO_CURRENT_CHAT (${currentChatId})`);
