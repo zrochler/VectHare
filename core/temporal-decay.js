@@ -313,7 +313,7 @@ export function applySceneAwareDecay(chunks, currentMessageId, scenes, decaySett
  */
 export function getDefaultDecaySettings() {
     return {
-        enabled: false,              // OFF by default
+        enabled: true,              // OFF by default
         type: 'decay',               // 'decay' (recency) or 'nostalgia' (history) - mutually exclusive
         mode: 'exponential',         // 'exponential' or 'linear'
         halfLife: DEFAULT_DECAY_HALF_LIFE,  // Messages until effect reaches 50%
