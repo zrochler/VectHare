@@ -103,6 +103,7 @@ const STRATEGIES = {
                     speaker,
                     isUser,
                     messageId,
+                    messageHashes: [msg.hash], // Store individual message hash for deduplication
                 },
             });
         }
@@ -133,6 +134,7 @@ const STRATEGIES = {
                         speaker: '[Summary]',
                         isUser: false,
                         messageId: messages[i].index ?? messages[i].id,
+                        messageHashes: [messages[i].hash], // Store individual message hash for deduplication
                     },
                 });
                 i += 1; // Move to the next message after the summary
@@ -155,6 +157,7 @@ const STRATEGIES = {
                 metadata: {
                     strategy: 'conversation_turns',
                     messageIds: pair.map(m => m.index ?? m.id),
+                    messageHashes: pair.map(m => m.hash), // Store individual hashes for injection lookup and deduplication
                     startIndex: pair[0].index ?? pair[0].id,
                     endIndex: pair[pair.length - 1].index ?? pair[pair.length - 1].id,
                 },
@@ -194,6 +197,7 @@ const STRATEGIES = {
                     strategy: 'message_batch',
                     batchSize: batch.length,
                     messageIds: batch.map(m => m.index ?? m.id),
+                    messageHashes: batch.map(m => m.hash), // Store individual hashes for injection lookup and deduplication
                     startIndex: batch[0].index ?? batch[0].id,
                     endIndex: batch[batch.length - 1].index ?? batch[batch.length - 1].id,
                 },
