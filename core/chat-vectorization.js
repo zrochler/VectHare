@@ -1316,28 +1316,65 @@ function deduplicateChunks(chunks, chat, settings, debugData) {
     const skipped = [];
 
     for (const chunk of chunks) {
-        const isInChat = currentChatHashes.has(chunk.hash);
+        // For grouped strategies (conversation_turns, message_batch), check if ANY constituent message is in chat
+        // For ungrouped strategies (per_message), just check the chunk hash
+        const messageHashes = chunk.metadata?.messageHashes || [];
+        const isGroupedStrategy = messageHashes.length > 0;
+        
+        let isInChat = false;
+        let matchedHash = null;
+        let matchedMsg = null;
+
+        if (isGroupedStrategy) {
+            // Check if ANY message hash in the group exists in current chat (conservative approach)
+            for (const msgHash of messageHashes) {
+                if (currentChatHashes.has(msgHash)) {
+                    isInChat = true;
+                    matchedHash = msgHash;
+                    matchedMsg = chatHashMap.get(msgHash);
+                    break;
+                }
+            }
+        } else {
+            // For ungrouped strategies, check the chunk hash directly
+            isInChat = currentChatHashes.has(chunk.hash);
+            if (isInChat) {
+                matchedHash = chunk.hash;
+                matchedMsg = chatHashMap.get(chunk.hash);
+            }
+        }
 
         if (isInChat) {
-            const matchedMsg = chatHashMap.get(chunk.hash);
-            console.debug(`[VectHare Dedup] ❌ SKIPPING chunk (hash: ${chunk.hash})`);
-            console.debug(`  Chunk text: "${chunk.text?.substring(0, 80)}..."`);
-            console.debug(`  Matches chat message #${matchedMsg.index} from ${matchedMsg.name}: "${matchedMsg.preview}..."`);
-            console.debug(`  Score: ${chunk.score?.toFixed(4)}, Collection: ${chunk.collectionId}`);
+            console.debug(`[VectHare Dedup] ❌ SKIPPING chunk (${isGroupedStrategy ? 'grouped' : 'ungrouped'} strategy)`);
+            console.debug(`[VectHare Dedup]  Chunk hash: ${chunk.hash}`);
+            if (isGroupedStrategy) {
+                console.debug(`[VectHare Dedup]  Message hashes in group: [${messageHashes.join(', ')}]`);
+                console.debug(`[VectHare Dedup]  Matched message hash: ${matchedHash}`);
+            }
+            console.debug(`[VectHare Dedup]  Chunk text: "${chunk.text?.substring(0, 80)}..."`);
+            if (matchedMsg) {
+                console.debug(`[VectHare Dedup]  Matches chat message #${matchedMsg.index} from ${matchedMsg.name}: "${matchedMsg.preview}..."`);
+            }
+            console.debug(`[VectHare Dedup]  Score: ${chunk.score?.toFixed(4)}, Collection: ${chunk.collectionId}`);
 
             skipped.push(chunk);
-            recordChunkFate(debugData, chunk.hash, 'injection', 'skipped',
-                'Already in current chat context - no injection needed',
-                { score: chunk.score }
+            const reason = isGroupedStrategy 
+                ? `Message already in chat context (constituent message matched)`
+                : 'Already in current chat context - no injection needed';
+            recordChunkFate(debugData, chunk.hash, 'injection', 'skipped', reason,
+                { score: chunk.score, reason, matchedHash: matchedHash }
             );
         } else {
-            console.debug(`[VectHare Dedup] ✅ KEEPING chunk (hash: ${chunk.hash}, score: ${chunk.score?.toFixed(4)})`);
-            console.debug(`  Text: "${chunk.text?.substring(0, 80)}..."`);
+            console.debug(`[VectHare Dedup] ✅ KEEPING chunk (${isGroupedStrategy ? 'grouped' : 'ungrouped'} strategy, hash: ${chunk.hash}, score: ${chunk.score?.toFixed(4)})`);
+            if (isGroupedStrategy) {
+                console.debug(`[VectHare Dedup]  Message hashes in group: [${messageHashes.join(', ')}]`);
+            }
+            console.debug(`[VectHare Dedup]  Text: "${chunk.text?.substring(0, 80)}..."`);
 
             toInject.push(chunk);
             recordChunkFate(debugData, chunk.hash, 'injection', 'passed',
                 'Not in current context - will inject',
-                { score: chunk.score, collectionId: chunk.collectionId }
+                { score: chunk.score, collectionId: chunk.collectionId, isGroupedStrategy }
             );
         }
     }
