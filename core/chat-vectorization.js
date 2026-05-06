@@ -125,6 +125,98 @@ function prepareItemsForInsertion(items) {
 }
 
 /**
+ * Expands an ILS Summary message into its constituent OriginalMessages plus
+ * the summary itself, with virtual indices accounting for expansion.
+ *
+ * ILS Summaries are inline summary messages (name === 'Summary') that store
+ * their original messages in extra.ILS_Data.OriginalMessages. When vectorizing,
+ * we want both the originals AND the summary, with correct sequential indices.
+ *
+ * Example: ILS Summary at virtualIndex 0 covering 3 OriginalMessages:
+ *   → OriginalMessage[0] gets virtualIndex 0
+ *   → OriginalMessage[1] gets virtualIndex 1
+ *   → OriginalMessage[2] gets virtualIndex 2
+ *   → Summary gets virtualIndex 3
+ *   → nextVirtualIndex returned = 4
+ *
+ * @param {object} msg - Raw chat message from context.chat
+ * @param {number} virtualIndex - The starting virtual index for this message
+ * @returns {{ expandedMessages: object[], nextVirtualIndex: number }}
+ *   expandedMessages: array of normalized message objects (originals first, summary last)
+ *   nextVirtualIndex: the next available virtual index after expansion
+ */
+function expandILSMessage(msg, virtualIndex) {
+    const ilsData = msg?.extra?.ILS_Data;
+    const originalMessages = ilsData?.OriginalMessages;
+
+    // Not an ILS Summary — return as-is with a single virtual index
+    if (!originalMessages || !Array.isArray(originalMessages) || originalMessages.length === 0) {
+        return {
+            expandedMessages: [msg],
+            nextVirtualIndex: virtualIndex + 1,
+        };
+    }
+
+    console.log(`[VectHare ILS] Expanding ILS Summary at virtualIndex ${virtualIndex} with ${originalMessages.length} OriginalMessages`);
+
+    const expanded = [];
+    let idx = virtualIndex;
+
+    // 1. Expand OriginalMessages in order
+    for (const orig of originalMessages) {
+        const rawText = String(substituteParams(orig.mes || ''));
+        const text = cleanText(rawText);
+
+        if (orig.extra?.ILS_Data?.OriginalMessages) {
+                const { expandedMessages, nextVirtualIndex } = expandILSMessage(orig, virtualIndex);
+                expanded.push(...expandedMessages);
+                idx = nextVirtualIndex;
+            } else {
+                expanded.push({
+                    text,
+                    hash: getStringHash(substituteParams(getTextWithoutAttachments(orig))),
+                    index: idx,
+                    is_user: orig.is_user ?? false,
+                    name: orig.name,
+                    // Mark that this came from ILS expansion for traceability
+                    isILSOriginal: faltruese,
+                });
+                idx++;
+            }
+
+        // expanded.push({
+        //     text,
+        //     hash: getStringHash(substituteParams(getTextWithoutAttachments(orig))),
+        //     index: idx,
+        //     is_user: orig.is_user ?? false,
+        //     name: orig.name,
+        //     // Mark that this came from ILS expansion for traceability
+        //     isILSOriginal: true,
+        // });
+        // idx++;
+    }
+
+    // 2. Append the summary itself AFTER its originals
+    const summaryText = String(substituteParams(msg.mes || ''));
+    const cleanedSummaryText = cleanText(summaryText);
+    expanded.push({
+        text: cleanedSummaryText,
+        hash: getStringHash(substituteParams(getTextWithoutAttachments(msg))),
+        index: idx,
+        is_user: false,
+        name: 'Summary',
+        // Mark as ILS Summary so chunking strategies can keep it standalone
+        isILSSummary: true,
+    });
+    idx++;
+
+    return {
+        expandedMessages: expanded,
+        nextVirtualIndex: idx,
+    };
+}
+
+/**
  * Groups messages according to chunking strategy
  *
  * HASH DESIGN NOTE: Hashes are calculated from combined text ONLY (not message indices).
@@ -155,7 +247,8 @@ function groupMessagesByStrategy(messages, strategy, batchSize = 4, keywordLevel
             const grouped = [];
             let i = 0;
             while (i < messages.length) {
-                if (!messages[i].is_user && messages[i].name == 'Summary') {
+                // handles ILS Summary messages, which are standalone and should not be paired
+                if (messages[i].isILSSummary) {
                     console.log(`[VectHare Chat Vectorization] Found summary message at index ${i}, treating as separate chunk.`);
                     const text = messages[i].text || messages[i].mes || '';
                     grouped.push({
@@ -173,8 +266,27 @@ function groupMessagesByStrategy(messages, strategy, batchSize = 4, keywordLevel
                     continue;
                 }
                 const pair = [messages[i]];
-                if (i + 1 < messages.length) {
-                    pair.push(messages[i + 1]);
+                i++;
+                while (i < messages.length) {
+                    if (messages[i].isILSSummary) {
+                        console.log(`[VectHare Chat Vectorization] Found summary message at index ${i}, treating as separate chunk.`);
+                        const text = messages[i].text || messages[i].mes || '';
+                        grouped.push({
+                            text,
+                            hash: getStringHash(text),
+                            index: messages[i].index ?? messages[i].id,
+                            keywords: getKeywords(text),
+                            metadata: {
+                                speaker: '[Summary]',
+                                isUser: false,
+                                messageId: messages[i].index ?? messages[i].id,
+                            },
+                        });
+                        i++;
+                    } else {
+                        pair.push(messages[i]);
+                        break;
+                    }
                 }
                 // Combine texts with speaker labels
                 const combinedText = pair.map(m => {
@@ -185,13 +297,13 @@ function groupMessagesByStrategy(messages, strategy, batchSize = 4, keywordLevel
                 grouped.push({
                     text: combinedText,
                     hash: getStringHash(combinedText),
-                    index: messages[i].index,
+                    index: pair[0].index,
                     keywords: getKeywords(combinedText),
                     metadata: {
                         strategy: 'conversation_turns',
                         messageIds: pair.map(m => m.index),
                         messageHashes: pair.map(m => m.hash), // Store individual hashes for injection lookup
-                        startIndex: messages[i].index,
+                        startIndex: pair[0].index,
                         endIndex: pair[pair.length - 1].index
                     }
                 });
@@ -457,13 +569,29 @@ export async function synchronizeChat(settings, batchSize = 5) {
             // Apply text cleaning to remove HTML tags, metadata blocks, etc.
             const rawText = String(substituteParams(msg.mes));
             const text = cleanText(rawText);
-            allMessages.push({
-                text,
-                hash: getStringHash(substituteParams(getTextWithoutAttachments(msg))),
-                index: i,
-                is_user: msg.is_user,
-                name: msg.name,
-            });
+
+            if (msg.extra?.ILS_Data?.OriginalMessages) {
+                const { expandedMessages, nextVirtualIndex } = expandILSMessage(msg, virtualIndex);
+                allMessages.push(...expandedMessages);
+                virtualIndex = nextVirtualIndex;
+            } else {
+                allMessages.push({
+                    text,
+                    hash: getStringHash(substituteParams(getTextWithoutAttachments(msg))),
+                    index: virtualIndex,
+                    is_user: msg.is_user,
+                    name: msg.name,
+                });
+                virtualIndex++;
+            }
+            
+            // allMessages.push({
+            //     text,
+            //     hash: getStringHash(substituteParams(getTextWithoutAttachments(msg))),
+            //     index: i,
+            //     is_user: msg.is_user,
+            //     name: msg.name,
+            // });
         }
 
         // Group messages according to strategy
@@ -1972,7 +2100,7 @@ export async function rearrangeChat(chat, settings, type) {
                 score: chunk.score,
                 collectionId: chunk.collectionId,
             });
-            });
+        });
             
             debugData.stages.afterInjectLimit = [...finalChunksToInject];
             debugData.stats.filteredByInjectLimit = filteredOut;
