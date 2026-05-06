@@ -1965,6 +1965,12 @@ export async function rearrangeChat(chat, settings, type) {
                     .filter(c => !finalChunksToInject.includes(c))
                     .map(c => c.score?.toFixed(4))
             });
+            filteredOut.forEach(chunk => {
+            recordChunkFate(debugData, chunk.hash, 'conditions', 'dropped', 'Injection Limit Reached', {
+                score: chunk.score,
+                collectionId: chunk.collectionId,
+            });
+            });
             
             debugData.stages.afterInjectLimit = [...finalChunksToInject];
             debugData.stats.filteredByInjectLimit = filteredOut;
