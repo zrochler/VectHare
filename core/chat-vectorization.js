@@ -446,7 +446,7 @@ export async function synchronizeChat(settings, batchSize = 5) {
 
         // Step 2: Build list of messages NOT in DB
         const strategy = settings.chunking_strategy || 'per_message';
-        const strategyBatchSize = settings.batch_size || 4;
+        const strategyBatchSize = settings.batch_size || batchSize;
 
         // Collect all non-system messages with their data
         // PERF: Use index from loop instead of indexOf() to avoid O(n²)
@@ -1940,13 +1940,12 @@ export async function rearrangeChat(chat, settings, type) {
             return;
         }
 
-        console.log(`[VectHare Deduplication] ✅ ${chunksToInject.length} chunks will proceed to injection`);
-
         // === STAGE 9.5: Apply inject_limit ===
         const injectLimit = settings.inject_limit ?? 0;
         let finalChunksToInject = chunksToInject;
         
         if (injectLimit > 0 && chunksToInject.length > injectLimit) {
+            console.log(`[VectHare Inject Limit] Applying inject limit: ${injectLimit} max chunks (currently ${chunksToInject.length})`);
             // Sort by score (descending) and keep only top N
             finalChunksToInject = [...chunksToInject]
                 .sort((a, b) => (b.score || 0) - (a.score || 0))
@@ -1972,6 +1971,9 @@ export async function rearrangeChat(chat, settings, type) {
         } else {
             console.log(`[VectHare Inject Limit] No limiting applied (limit: ${injectLimit}, chunks: ${chunksToInject.length})`);
         }
+
+        console.log(`VectHare: ✅ ${finalChunksToInject.length} chunks will proceed to injection`);
+
 
         // === STAGE 10: Inject into prompt ===
         const injection = injectChunksIntoPrompt(finalChunksToInject, settings, debugData);
