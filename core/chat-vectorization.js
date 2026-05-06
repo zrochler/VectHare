@@ -1927,7 +1927,7 @@ export async function rearrangeChat(chat, settings, type) {
 
         if (chunksToInject.length === 0) {
             console.log('ℹ️ VectHare: All retrieved chunks already in context, nothing to inject');
-            console.log(`   ${skippedDuplicates.length} chunks were skipped (already in current chat)`);
+            console.log(`[VectHare]   ${skippedDuplicates.length} chunks were skipped (already in current chat)`);
             console.info('[VectHare] Injection blocked: All retrieved chunks are already present in the current chat context. Adjust temporal decay or query depth if you want older messages.');
             debugData.stages.injected = [];
             debugData.stats.actuallyInjected = 0;
@@ -1965,7 +1965,9 @@ export async function rearrangeChat(chat, settings, type) {
                     .filter(c => !finalChunksToInject.includes(c))
                     .map(c => c.score?.toFixed(4))
             });
-            filteredOut.forEach(chunk => {
+            [...chunksToInject]
+                .sort((a, b) => (b.score || 0) - (a.score || 0))
+                .slice(-filteredOut ).forEach(chunk => {
             recordChunkFate(debugData, chunk.hash, 'conditions', 'dropped', 'Injection Limit Reached', {
                 score: chunk.score,
                 collectionId: chunk.collectionId,
