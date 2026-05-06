@@ -1991,8 +1991,8 @@ export async function rearrangeChat(chat, settings, type) {
         console.log(`   Total characters injected: ${injection.text.length}\n`);
 
         // Finalize debug data
-        debugData.stages.injected = chunksToInject;
-        debugData.stats.actuallyInjected = chunksToInject.length;
+        debugData.stages.injected = finalChunksToInject;
+        debugData.stats.actuallyInjected = finalChunksToInject.length;
         debugData.stats.skippedDuplicates = skippedDuplicates.length;
         debugData.injection = {
             verified: injection.verified,
@@ -2004,9 +2004,9 @@ export async function rearrangeChat(chat, settings, type) {
         };
 
         addTrace(debugData, 'final', 'PIPELINE COMPLETE - SUCCESS', {
-            injectedCount: chunksToInject.length,
+            injectedCount: finalChunksToInject.length,
             skippedDuplicates: skippedDuplicates.length,
-            injectedHashes: chunksToInject.map(c => c.hash),
+            injectedHashes: finalChunksToInject.map(c => c.hash),
             totalTokens: injection.text.length,
             position: settings.position,
             depth: settings.depth,
@@ -2014,7 +2014,7 @@ export async function rearrangeChat(chat, settings, type) {
         });
 
         setLastSearchDebug(debugData);
-        console.log(`VectHare: ✅ Injected ${chunksToInject.length} chunks (${skippedDuplicates.length} skipped - already in context)`);
+        console.log(`VectHare: ✅ Injected ${finalChunksToInject.length} chunks (${skippedDuplicates.length} skipped - already in context)`);
 
     } catch (error) {
         toastr.error(`Generation interceptor aborted: ${error.message}`, 'VectHare');
