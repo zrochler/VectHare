@@ -507,6 +507,12 @@ export function renderSettings(containerId, settings, callbacks) {
                                 <small class="vecthare_hint" style="margin-left:8px;">Number of results to retrieve per collection</small>
                             </div>
 
+                            <div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
+                                <label for="vecthare_inject_limit" style="margin:0; white-space:nowrap;"><small>Max Inject</small></label>
+                                <input id="vecthare_inject_limit" type="number" class="vecthare-input" min="0" style="width:90px;" />
+                                <small class="vecthare_hint" style="margin-left:8px;">Maximum messages to inject after filtering (0 = unlimited)</small>
+                            </div>
+
                             <label style="margin-top: 16px;">
                                 <small>Injection Position</small>
                             </label>
@@ -2081,6 +2087,28 @@ function bindSettingsEvents(settings, callbacks) {
             const value = parseInt($(this).val());
             const safeValue = isNaN(value) ? (settings.insert || 3) : value;
             settings.top_k = safeValue;
+            Object.assign(extension_settings.vecthare, settings);
+            saveSettingsDebounced();
+        });
+
+    // Max Injected Messages - limit number of chunks injected after filtering
+    $('#vecthare_inject_limit')
+        .val(settings.inject_limit ?? 0)
+        .on('input', function() {
+            const value = parseInt($(this).val());
+            const safeValue = isNaN(value) || value < 0 ? 0 : value;
+            settings.inject_limit = safeValue;
+            Object.assign(extension_settings.vecthare, settings);
+            saveSettingsDebounced();
+        });
+
+    // Max Injected Messages - limit number of chunks injected after filtering
+    $('#vecthare_inject_limit')
+        .val(settings.inject_limit ?? 0)
+        .on('input', function() {
+            const value = parseInt($(this).val());
+            const safeValue = isNaN(value) || value < 0 ? 0 : value;
+            settings.inject_limit = safeValue;
             Object.assign(extension_settings.vecthare, settings);
             saveSettingsDebounced();
         });

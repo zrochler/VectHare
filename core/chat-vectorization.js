@@ -1942,10 +1942,41 @@ export async function rearrangeChat(chat, settings, type) {
 
         console.log(`[VectHare Deduplication] ✅ ${chunksToInject.length} chunks will proceed to injection`);
 
-        // === STAGE 10: Inject into prompt ===
-        const injection = injectChunksIntoPrompt(chunksToInject, settings, debugData);
+        // === STAGE 9.5: Apply inject_limit ===
+        const injectLimit = settings.inject_limit ?? 0;
+        let finalChunksToInject = chunksToInject;
+        
+        if (injectLimit > 0 && chunksToInject.length > injectLimit) {
+            // Sort by score (descending) and keep only top N
+            finalChunksToInject = [...chunksToInject]
+                .sort((a, b) => (b.score || 0) - (a.score || 0))
+                .slice(0, injectLimit);
+            
+            const filteredOut = chunksToInject.length - finalChunksToInject.length;
+            console.log(`[VectHare Inject Limit] Filtered ${filteredOut} chunks by inject_limit (${injectLimit} max)`);
+            console.log(`[VectHare Inject Limit] Kept top ${finalChunksToInject.length} by score, filtered out ${filteredOut} lower-scoring chunks`);
+            
+            addTrace(debugData, 'inject_limit', 'Applied inject limit', {
+                totalChunks: chunksToInject.length,
+                injectLimit: injectLimit,
+                kept: finalChunksToInject.length,
+                filteredOut: filteredOut,
+                keptScores: finalChunksToInject.map(c => c.score?.toFixed(4)),
+                filteredScores: chunksToInject
+                    .filter(c => !finalChunksToInject.includes(c))
+                    .map(c => c.score?.toFixed(4))
+            });
+            
+            debugData.stages.afterInjectLimit = [...finalChunksToInject];
+            debugData.stats.filteredByInjectLimit = filteredOut;
+        } else {
+            console.log(`[VectHare Inject Limit] No limiting applied (limit: ${injectLimit}, chunks: ${chunksToInject.length})`);
+        }
 
-        console.log(`\n✅ VectHare: Successfully injected ${chunksToInject.length} chunk(s) into prompt`);
+        // === STAGE 10: Inject into prompt ===
+        const injection = injectChunksIntoPrompt(finalChunksToInject, settings, debugData);
+
+        console.log(`\n✅ VectHare: Successfully injected ${finalChunksToInject.length} chunk(s) into prompt`);
         console.log(`   Verification: ${injection.verified ? '✓ PASSED' : '✗ FAILED'}`);
         console.log(`   Total characters injected: ${injection.text.length}\n`);
 
