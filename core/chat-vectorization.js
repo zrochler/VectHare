@@ -297,7 +297,7 @@ export async function autoSyncChat(settings, batchSize = 5) {
         const source = {
             type: 'current',
             name: context.name || 'Current Chat',
-            messages: context.chat,
+            content: context.chat,
         };
 
         // Prepare settings for vectorizeContent
