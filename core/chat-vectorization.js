@@ -691,15 +691,15 @@ function applyThresholdFilter(chunks, threshold, debugData) {
  * @returns {object[]} Chunks with decay applied
  */
 function applyTemporalDecayStage(chunks, chat, settings, threshold, debugData) {
-    if (!settings.temporal_decay || !settings.temporal_decay.enabled) {
-        addTrace(debugData, 'decay', 'Temporal decay skipped (disabled)', { enabled: false });
-        chunks.forEach(chunk => {
-            recordChunkFate(debugData, chunk.hash, 'decay', 'passed', 'Decay disabled', {
-                score: chunk.score
-            });
-        });
-        return chunks;
-    }
+    // if (!settings.temporal_decay || !settings.temporal_decay.enabled) {
+    //     addTrace(debugData, 'decay', 'Temporal decay skipped (disabled)', { enabled: false });
+    //     chunks.forEach(chunk => {
+    //         recordChunkFate(debugData, chunk.hash, 'decay', 'passed', 'Decay disabled', {
+    //             score: chunk.score
+    //         });
+    //     });
+    //     return chunks;
+    // }
 
     const beforeCount = chunks.length;
     addTrace(debugData, 'decay', 'Starting temporal decay', {
