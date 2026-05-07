@@ -2472,6 +2472,7 @@ async function startVectorization() {
             contentType: currentContentType,
             source: source,
             settings: currentSettings,
+            incremental: true // Enable hash-based deduplication
         });
 
         toastr.success(`Vectorized ${result.chunkCount} chunks`, 'VectHare');
