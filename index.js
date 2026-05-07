@@ -23,7 +23,7 @@ import { debounce } from '../../../utils.js';
 import { debounce_timeout } from '../../../constants.js';
 
 // VectHare modules - Core
-import { autoSynChat, rearrangeChat, vectorizeAll } from './core/chat-vectorization.js';
+import { autoSyncChat, rearrangeChat, vectorizeAll } from './core/chat-vectorization.js';
 import { purgeAllVectorIndexes, purgeVectorIndex } from './core/core-vector-api.js';
 import { getChatCollectionId } from './core/chat-vectorization.js';
 import { getDefaultDecaySettings } from './core/temporal-decay.js';
