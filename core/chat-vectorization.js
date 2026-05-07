@@ -761,7 +761,7 @@ function applyTemporalDecayStage(chunks, chat, settings, threshold, debugData) {
     console.log(`[VectHare Decay Debug] Applied decay to ${decayedCount} chunks, ${scoreChanges.length} had scores reduced`);
     if (scoreChanges.length > 0) {
         scoreChanges.slice(0, 3).forEach(c => {
-            console.log(`  - Hash ${c.hash.substring(0, 8)}: ${c.originalScore?.toFixed(4)} → ${c.score?.toFixed(4)} (age: ${c.messageAge})`);
+            console.log(`  - Hash ${c.hash}: ${c.originalScore?.toFixed(4)} → ${c.score?.toFixed(4)} (age: ${c.messageAge})`);
         });
     }
 
