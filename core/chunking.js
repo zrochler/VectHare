@@ -124,6 +124,7 @@ const STRATEGIES = {
         while (i < messages.length) {
         // for (let i = 0; i < messages.length; i += 2) {
         // "extra":{"ILS_Data":{"OriginalMessages":[...
+        // handles ILS Summary messages, which are standalone and should not be paired
         if(!messages[i].is_user && messages[i].name == 'Summary') {
                 console.log(`[VectHare Chunking] Found summary message at index ${i}, treating as separate chunk.`);
                 // If we encounter a summary, treat it as its own chunk and skip pairing

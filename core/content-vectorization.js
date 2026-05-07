@@ -28,7 +28,7 @@ import { extractLorebookKeywords, extractTextKeywords, extractChatKeywords, extr
 import { cleanText, cleanMessages } from './text-cleaning.js';
 import { progressTracker } from '../ui/progress-tracker.js';
 import { extension_settings, getContext } from '../../../../extensions.js';
-import { getStringHash } from '../../../../utils.js';
+import { getStringHash, enrichVectorItems } from './shared-vectorization.js';
 
 /**
  * Main entry point for content vectorization
@@ -81,11 +81,15 @@ export async function vectorizeContent({ contentType, source, settings }) {
         // Get full extension settings for keyword extraction (includes custom_stopwords)
         const vecthareSettings = extension_settings.vecthare;
         
-        const enrichedChunks = enrichChunks(chunks, contentType, source, settings, preparedContent, vecthareSettings);
-        const hashedChunks = enrichedChunks.map(chunk => ({
-            ...chunk,
-            hash: getStringHash(chunk.text),
-        }));
+        // Enrich chunks with hashes and keywords (shared enrichment)
+        const enrichedChunks = enrichVectorItems(chunks, {
+            keywordLevel: settings.keywordLevel || 'balanced',
+            keywordBaseWeight: settings.keywordBaseWeight || 1.5,
+        }, {
+            contentType,
+            preparedContent,
+            vecthareSettings,
+        });
 
         // Step 4: Insert into vector store (streaming: embed + write together)
         progressTracker.updateProgress(4, 'Processing chunks...');
@@ -106,7 +110,7 @@ export async function vectorizeContent({ contentType, source, settings }) {
         }
 
         try {
-            await insertVectorItems(collectionId, hashedChunks, vecthareSettings, (embedded, total) => {
+            await insertVectorItems(collectionId, enrichedChunks, vecthareSettings, (embedded, total) => {
             // Update progress with streaming count
             console.log(`[Content Vectorization] Processing progress callback: ${embedded}/${total}`);
             progressTracker.updateEmbeddingProgress(embedded, total);
@@ -132,7 +136,7 @@ export async function vectorizeContent({ contentType, source, settings }) {
             contentType,
             sourceName,
             scope: settings.scope || 'global',
-            chunkCount: hashedChunks.length,
+            chunkCount: enrichedChunks.length,
             createdAt: new Date().toISOString(),
             settings: {
                 strategy: settings.strategy,
@@ -147,11 +151,11 @@ export async function vectorizeContent({ contentType, source, settings }) {
         registerCollection(collectionId);
         console.log(`VectHare: Registered collection ${collectionId}`);
 
-        progressTracker.complete(true, `Vectorized ${hashedChunks.length} chunks`);
+        progressTracker.complete(true, `Vectorized ${enrichedChunks.length} chunks`);
 
         return {
             success: true,
-            chunkCount: hashedChunks.length,
+            chunkCount: enrichedChunks.length,
             collectionId,
         };
     } catch (error) {
@@ -678,108 +682,6 @@ function generateCollectionId(contentType, source, settings) {
     }
 
     return `vecthare_${contentType}_${scopePrefix}${sanitizedName}_${timestamp}`;
-}
-
-/**
- * Enriches chunks with metadata and keywords
- * @param {Array} chunks - Array of chunk strings or objects
- * @param {string} contentType - Type of content
- * @param {object} source - Source info
- * @param {object} settings - Vectorization settings including keyword options
- * @param {object} preparedContent - Prepared content data
- * @param {object} vecthareSettings - Full VectHare extension settings (includes custom_stopwords)
- */
-function enrichChunks(chunks, contentType, source, settings, preparedContent, vecthareSettings) {
-    // Get keyword extraction settings
-    const keywordLevel = settings.keywordLevel || 'balanced';
-    const keywordBaseWeight = settings.keywordBaseWeight || 1.5;
-
-    return chunks.map((chunk, index) => {
-        const chunkText = typeof chunk === 'string' ? chunk : chunk.text;
-        let keywords = []; // Will hold {text, weight} objects
-        let entryName = null;
-        let entryUid = null;
-
-        // For lorebooks with per_entry, get keywords from the entry
-        if (contentType === 'lorebook' && preparedContent.entries?.[index]) {
-            const entry = preparedContent.entries[index];
-            entryName = entry.comment || entry.name || entry.key?.[0] || 'Entry';
-            entryUid = entry.uid;
-
-            // Get explicit trigger keys (these are manually set, so use base weight)
-            const triggerKeys = extractLorebookKeywords(entry, vecthareSettings);
-            keywords = triggerKeys.map(k => ({ text: k, weight: keywordBaseWeight }));
-
-            // Also get auto-extracted keywords with frequency-based weights
-            if (keywordLevel !== 'off') {
-                const autoKeywords = extractTextKeywords(entry.content || chunkText, {
-                    level: keywordLevel,
-                    baseWeight: keywordBaseWeight,
-                    settings: vecthareSettings,
-                });
-                keywords = keywords.concat(autoKeywords);
-            }
-        } else if (contentType === 'chat') {
-            // For chat, use BM25/TF-IDF to find most distinctive words
-            if (keywordLevel !== 'off') {
-                keywords = extractBM25Keywords(chunkText, {
-                    level: keywordLevel,
-                    baseWeight: keywordBaseWeight,
-                    settings: vecthareSettings,
-                });
-            }
-        } else {
-            // For other content (url, wiki, document, youtube), use frequency-based extraction
-            if (keywordLevel !== 'off') {
-                keywords = extractTextKeywords(chunkText, {
-                    level: keywordLevel,
-                    baseWeight: keywordBaseWeight,
-                    settings: vecthareSettings,
-                });
-            }
-        }
-
-        // Add character name as keyword with higher weight (it's the main subject)
-        if (contentType === 'character' && preparedContent.character?.name) {
-            keywords.push({
-                text: preparedContent.character.name.toLowerCase(),
-                weight: keywordBaseWeight + 0.5, // Character name gets bonus weight
-            });
-        }
-
-        // Add speaker name as keyword for chat messages
-        if (contentType === 'chat' && chunk.metadata?.speakerName) {
-            keywords.push({
-                text: chunk.metadata.speakerName.toLowerCase(),
-                weight: keywordBaseWeight,
-            });
-        }
-
-        // Deduplicate keywords (keep highest weight for duplicates)
-        const keywordMap = new Map();
-        for (const kw of keywords) {
-            const existing = keywordMap.get(kw.text);
-            if (!existing || kw.weight > existing.weight) {
-                keywordMap.set(kw.text, kw);
-            }
-        }
-        const dedupedKeywords = Array.from(keywordMap.values());
-
-        return {
-            text: chunkText,
-            index: index,
-            keywords: dedupedKeywords,
-            metadata: {
-                contentType,
-                sourceName: source.name || source.filename || 'Unknown',
-                entryName,
-                entryUid,
-                keywordLevel,
-                keywordBaseWeight,
-                ...(chunk.metadata || {}),
-            },
-        };
-    });
 }
 
 /**

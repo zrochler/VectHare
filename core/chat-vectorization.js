@@ -10,11 +10,12 @@
  */
 
 import { getCurrentChatId, is_send_press, setExtensionPrompt, substituteParams, chat_metadata, extension_prompts } from '../../../../../script.js';
-import { getContext } from '../../../../extensions.js';
-import { getStringHash as calculateHash, waitUntilCondition, onlyUnique } from '../../../../utils.js';
+import { getContext, extension_settings } from '../../../../extensions.js';
+import { waitUntilCondition, onlyUnique } from '../../../../utils.js';
 import { isUnitStrategy } from './chunking.js';
-import { extractChatKeywords, extractBM25Keywords } from './keyword-boost.js';
+import { extractBM25Keywords } from './keyword-boost.js';
 import { cleanText } from './text-cleaning.js';
+import { getStringHash, enrichVectorItems } from './shared-vectorization.js';
 import {
     getSavedHashes,
     insertVectorItems,
@@ -34,9 +35,9 @@ import { getChunkMetadata, getCollectionMeta } from './collection-metadata.js';
 import { processChunkGroups, mergeVirtualLinks } from './chunk-groups.js';
 import { createDebugData, setLastSearchDebug, addTrace, recordChunkFate } from '../ui/search-debug.js';
 import { getSemanticWorldInfoEntries } from './world-info-integration.js';
-import { Queue, LRUCache } from '../utils/data-structures.js';
+import { Queue } from '../utils/data-structures.js';
 import { getRequestHeaders } from '../../../../../script.js';
-import { EXTENSION_PROMPT_TAG, HASH_CACHE_SIZE } from './constants.js';
+import { EXTENSION_PROMPT_TAG } from './constants.js';
 // Import from collection-ids.js - single source of truth for collection ID operations
 import {
     getChatUUID,
@@ -46,9 +47,6 @@ import {
     parseCollectionId,
     parseRegistryKey,
 } from './collection-ids.js';
-
-// Hash cache for performance
-const hashCache = new LRUCache(HASH_CACHE_SIZE);
 
 // Synchronization state
 let syncBlocked = false;
@@ -81,22 +79,7 @@ export function getLegacyChatCollectionId(chatId) {
 }
 
 // Re-export getAllChatCollectionIds with adapted return format for backwards compat
-export { getAllChatCollectionIds, parseCollectionId, parseRegistryKey };
-
-/**
- * Gets the hash value for a string (with LRU caching)
- * @param {string} str Input string
- * @returns {number} Hash value
- */
-function getStringHash(str) {
-    const cached = hashCache.get(str);
-    if (cached !== undefined) {
-        return cached;
-    }
-    const hash = calculateHash(str);
-    hashCache.set(str, hash);
-    return hash;
-}
+export { getAllChatCollectionIds, parseCollectionId, parseRegistryKey, getStringHash };
 
 /**
  * Gets message text without file attachments
@@ -125,6 +108,88 @@ function prepareItemsForInsertion(items) {
 }
 
 /**
+ * Expands an ILS Summary message into its constituent OriginalMessages plus
+ * the summary itself, with virtual indices accounting for expansion.
+ *
+ * ILS Summaries are inline summary messages (name === 'Summary') that store
+ * their original messages in extra.ILS_Data.OriginalMessages. When vectorizing,
+ * we want both the originals AND the summary, with correct sequential indices.
+ *
+ * Example: ILS Summary at virtualIndex 0 covering 3 OriginalMessages:
+ *   → OriginalMessage[0] gets virtualIndex 0
+ *   → OriginalMessage[1] gets virtualIndex 1
+ *   → OriginalMessage[2] gets virtualIndex 2
+ *   → Summary gets virtualIndex 3
+ *   → nextVirtualIndex returned = 4
+ *
+ * @param {object} msg - Raw chat message from context.chat
+ * @param {number} virtualIndex - The starting virtual index for this message
+ * @returns {{ expandedMessages: object[], nextVirtualIndex: number }}
+ *   expandedMessages: array of normalized message objects (originals first, summary last)
+ *   nextVirtualIndex: the next available virtual index after expansion
+ */
+function expandILSMessage(msg, virtualIndex) {
+    const ilsData = msg?.extra?.ILS_Data;
+    const originalMessages = ilsData?.OriginalMessages;
+
+    // Not an ILS Summary — return as-is with a single virtual index
+    if (!originalMessages || !Array.isArray(originalMessages) || originalMessages.length === 0) {
+        return {
+            expandedMessages: [msg],
+            nextVirtualIndex: virtualIndex + 1,
+        };
+    }
+
+    console.log(`[VectHare ILS] Expanding ILS Summary at virtualIndex ${virtualIndex} with ${originalMessages.length} OriginalMessages`);
+
+    const expanded = [];
+    let idx = virtualIndex;
+
+    // 1. Expand OriginalMessages in order
+    for (const orig of originalMessages) {
+        const rawText = String(substituteParams(orig.mes || ''));
+        const text = cleanText(rawText);
+
+        if (orig.extra?.ILS_Data?.OriginalMessages) {
+                // ILS Summaries can be nested, so recursively expand if we encounter another summary in the originals
+                const { expandedMessages, nextVirtualIndex } = expandILSMessage(orig, virtualIndex);
+                expanded.push(...expandedMessages);
+                idx = nextVirtualIndex;
+            } else {
+                expanded.push({
+                    text,
+                    hash: getStringHash(substituteParams(getTextWithoutAttachments(orig))),
+                    index: idx,
+                    is_user: orig.is_user ?? false,
+                    name: orig.name,
+                    // Mark that this came from ILS expansion for traceability
+                    isILSOriginal: faltruese,
+                });
+                idx++;
+            }
+    }
+
+    // 2. Append the summary itself AFTER its originals
+    const summaryText = String(substituteParams(msg.mes || ''));
+    const cleanedSummaryText = cleanText(summaryText);
+    expanded.push({
+        text: cleanedSummaryText,
+        hash: getStringHash(substituteParams(getTextWithoutAttachments(msg))),
+        index: idx,
+        is_user: false,
+        name: 'Summary',
+        // Mark as ILS Summary so chunking strategies can keep it standalone
+        isILSSummary: true,
+    });
+    idx++;
+
+    return {
+        expandedMessages: expanded,
+        nextVirtualIndex: idx,
+    };
+}
+
+/**
  * Groups messages according to chunking strategy
  *
  * HASH DESIGN NOTE: Hashes are calculated from combined text ONLY (not message indices).
@@ -134,20 +199,16 @@ function prepareItemsForInsertion(items) {
  * DO NOT add message indices to hash calculation - it would break incremental sync and
  * disable deduplication with no functional benefit.
  *
+ * Note: This function groups messages but DOES NOT compute hashes or extract keywords.
+ * Enrichment happens after grouping in synchronizeChat() via enrichVectorItems().
+ *
  * @param {object[]} messages Messages to group
  * @param {string} strategy Chunking strategy: 'per_message', 'conversation_turns', 'message_batch'
  * @param {number} batchSize Number of messages per batch (for message_batch strategy)
- * @param {string} keywordLevel Keyword extraction level: 'off', 'minimal', 'balanced', 'aggressive'
- * @returns {object[]} Grouped message items ready for chunking
+ * @returns {object[]} Grouped message items (without hashes or keywords)
  */
-function groupMessagesByStrategy(messages, strategy, batchSize = 4, keywordLevel = 'balanced') {
+function groupMessagesByStrategy(messages, strategy, batchSize = 4) {
     if (!messages.length) return [];
-
-    // Helper to extract keywords based on level
-    const getKeywords = (text) => {
-        if (keywordLevel === 'off') return [];
-        return extractBM25Keywords(text, { level: keywordLevel });
-    };
 
     switch (strategy) {
         case 'conversation_turns': {
@@ -155,14 +216,13 @@ function groupMessagesByStrategy(messages, strategy, batchSize = 4, keywordLevel
             const grouped = [];
             let i = 0;
             while (i < messages.length) {
-                if (!messages[i].is_user && messages[i].name == 'Summary') {
+                // handles ILS Summary messages, which are standalone and should not be paired
+                if (messages[i].isILSSummary) {
                     console.log(`[VectHare Chat Vectorization] Found summary message at index ${i}, treating as separate chunk.`);
                     const text = messages[i].text || messages[i].mes || '';
                     grouped.push({
                         text,
-                        hash: getStringHash(text),
                         index: messages[i].index ?? messages[i].id,
-                        keywords: getKeywords(text),
                         metadata: {
                             speaker: '[Summary]',
                             isUser: false,
@@ -173,8 +233,25 @@ function groupMessagesByStrategy(messages, strategy, batchSize = 4, keywordLevel
                     continue;
                 }
                 const pair = [messages[i]];
-                if (i + 1 < messages.length) {
-                    pair.push(messages[i + 1]);
+                i++;
+                while (i < messages.length) {
+                    if (messages[i].isILSSummary) {
+                        console.log(`[VectHare Chat Vectorization] Found summary message at index ${i}, treating as separate chunk.`);
+                        const text = messages[i].text || messages[i].mes || '';
+                        grouped.push({
+                            text,
+                            index: messages[i].index ?? messages[i].id,
+                            metadata: {
+                                speaker: '[Summary]',
+                                isUser: false,
+                                messageId: messages[i].index ?? messages[i].id,
+                            },
+                        });
+                        i++;
+                    } else {
+                        pair.push(messages[i]);
+                        break;
+                    }
                 }
                 // Combine texts with speaker labels
                 const combinedText = pair.map(m => {
@@ -184,14 +261,12 @@ function groupMessagesByStrategy(messages, strategy, batchSize = 4, keywordLevel
 
                 grouped.push({
                     text: combinedText,
-                    hash: getStringHash(combinedText),
-                    index: messages[i].index,
-                    keywords: getKeywords(combinedText),
+                    index: pair[0].index,
                     metadata: {
                         strategy: 'conversation_turns',
                         messageIds: pair.map(m => m.index),
                         messageHashes: pair.map(m => m.hash), // Store individual hashes for injection lookup
-                        startIndex: messages[i].index,
+                        startIndex: pair[0].index,
                         endIndex: pair[pair.length - 1].index
                     }
                 });
@@ -213,9 +288,7 @@ function groupMessagesByStrategy(messages, strategy, batchSize = 4, keywordLevel
 
                 grouped.push({
                     text: combinedText,
-                    hash: getStringHash(combinedText),
                     index: batch[0].index,
-                    keywords: getKeywords(combinedText),
                     metadata: {
                         strategy: 'message_batch',
                         batchSize: batch.length,
@@ -234,14 +307,12 @@ function groupMessagesByStrategy(messages, strategy, batchSize = 4, keywordLevel
             // Current behavior - each message is its own item
             return messages.map(m => ({
                 text: m.text,
-                hash: m.hash,
                 index: m.index,
                 is_user: m.is_user,
-                keywords: getKeywords(m.text),
                 metadata: {
                     strategy: 'per_message',
                     messageId: m.index,
-                    messageHashes: [m.hash] // Consistent with grouped strategies
+                    messageHashes: [m.hash] // Store for injection lookup
                 }
             }));
     }
@@ -457,22 +528,39 @@ export async function synchronizeChat(settings, batchSize = 5) {
             // Apply text cleaning to remove HTML tags, metadata blocks, etc.
             const rawText = String(substituteParams(msg.mes));
             const text = cleanText(rawText);
-            allMessages.push({
-                text,
-                hash: getStringHash(substituteParams(getTextWithoutAttachments(msg))),
-                index: i,
-                is_user: msg.is_user,
-                name: msg.name,
-            });
+
+            if (msg.extra?.ILS_Data?.OriginalMessages) {
+                const { expandedMessages, nextVirtualIndex } = expandILSMessage(msg, virtualIndex);
+                allMessages.push(...expandedMessages);
+                virtualIndex = nextVirtualIndex;
+            } else {
+                allMessages.push({
+                    text,
+                    hash: getStringHash(substituteParams(getTextWithoutAttachments(msg))),
+                    index: virtualIndex,
+                    is_user: msg.is_user,
+                    name: msg.name,
+                });
+                virtualIndex++;
+            }
         }
 
         // Group messages according to strategy
+        const groupedItems = groupMessagesByStrategy(allMessages, strategy, strategyBatchSize);
+
+        // Enrich grouped items with hashes and keywords (shared enrichment)
         const keywordLevel = settings.keyword_extraction_level || 'balanced';
-        const groupedItems = groupMessagesByStrategy(allMessages, strategy, strategyBatchSize, keywordLevel);
+        const enrichedItems = enrichVectorItems(groupedItems, {
+            keywordLevel,
+            keywordBaseWeight: 1.5,
+        }, {
+            contentType: 'chat',
+            vecthareSettings: extension_settings.vecthare,
+        });
 
         // Filter out already vectorized items (by their grouped hash)
         const queue = new Queue();
-        for (const item of groupedItems) {
+        for (const item of enrichedItems) {
             if (!existingHashes.has(item.hash)) {
                 queue.enqueue(item);
             }
@@ -1972,7 +2060,7 @@ export async function rearrangeChat(chat, settings, type) {
                 score: chunk.score,
                 collectionId: chunk.collectionId,
             });
-            });
+        });
             
             debugData.stages.afterInjectLimit = [...finalChunksToInject];
             debugData.stats.filteredByInjectLimit = filteredOut;
