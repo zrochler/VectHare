@@ -1594,6 +1594,14 @@ export async function rearrangeChat(chat, settings, type) {
                     .map(kw => (typeof kw === 'object' ? kw.text : kw)?.toLowerCase())
                     .filter(Boolean);
 
+                const chunkKeyWordWeights = (chunk.metadata?.keywords || []).reduce((acc, kw) => {
+                    const text = typeof kw === 'object' ? kw.text : kw;
+                    if (text) {
+                        acc[text.toLowerCase()] = kw.weight || 1.0;
+                    }
+                    return acc;
+                }, {});
+
                 // Check if chunk has any matching keywords
                 const matchedKeywords = queryKeywordTexts.filter(qk => chunkKeywords.includes(qk));
 
@@ -1602,14 +1610,16 @@ export async function rearrangeChat(chat, settings, type) {
                     const oldScore = chunk.score;
                     chunk.keywordMatched = true;
                     chunk.matchedQueryKeywords = matchedKeywords;
-                    chunk.score = 1.0; // 100% perfect match
                     chunk.originalScore = oldScore;
                     keywordMatchCount++;
+
+                    const boost = matchedKeywords.reduce((mult, kw) => mult * chunkKeyWordWeights[kw], 1.0);
+                    chunk.score = oldScore * boost;
 
                     addTrace(debugData, 'keyword_boost', `Chunk boosted by ${matchedKeywords.length} keyword(s)`, {
                         hash: chunk.hash,
                         matchedKeywords,
-                        newScore: 1.0,
+                        newScore: chunk.score,
                         oldScore
                     });
                 }
