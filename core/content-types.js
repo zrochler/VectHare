@@ -405,6 +405,7 @@ export const CONTENT_TYPES = {
  * Get content type definition by ID
  */
 export function getContentType(typeId) {
+    if (typeId === 'current') { return CONTENT_TYPES['chat']; } // Alias for current chat context
     return CONTENT_TYPES[typeId] || null;
 }
 
