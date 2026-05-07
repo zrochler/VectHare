@@ -12,7 +12,7 @@
 
 import { getContentType, getContentTypeDefaults, hasFeature } from './content-types.js';
 import { chunkText } from './chunking.js';
-import { insertVectorItems, purgeVectorIndex } from './core-vector-api.js';
+import { insertVectorItems, purgeVectorIndex, getSavedHashes } from './core-vector-api.js';
 import { setCollectionMeta, getDefaultDecayForType } from './collection-metadata.js';
 import { registerCollection } from './collection-loader.js';
 import { getBackend } from '../backends/backend-manager.js';
@@ -28,7 +28,7 @@ import { extractLorebookKeywords, extractTextKeywords, extractChatKeywords, extr
 import { cleanText, cleanMessages } from './text-cleaning.js';
 import { progressTracker } from '../ui/progress-tracker.js';
 import { extension_settings, getContext } from '../../../../extensions.js';
-import { getStringHash, enrichVectorItems } from './shared-vectorization.js';
+import { getStringHash, enrichVectorItems, expandILSMessage } from './shared-vectorization.js';
 
 /**
  * Main entry point for content vectorization
@@ -38,14 +38,15 @@ import { getStringHash, enrichVectorItems } from './shared-vectorization.js';
  * @param {object} params.settings - Type-specific settings
  * @returns {Promise<{success: boolean, chunkCount: number, collectionId: string}>}
  */
-export async function vectorizeContent({ contentType, source, settings }) {
+export async function vectorizeContent({ contentType, source, settings, incremental = false }) {
     const type = getContentType(contentType);
     if (!type) {
         throw new Error(`Unknown content type: ${contentType}`);
     }
 
     const sourceName = source.name || source.filename || source.id || contentType;
-    progressTracker.show(`Vectorizing ${type.label || contentType}`, 4, 'Steps');
+    const totalSteps = incremental ? 5 : 4;
+    progressTracker.show(`Vectorizing ${type.label || contentType}`, totalSteps, 'Steps');
     progressTracker.updateCurrentItem(sourceName);
 
     try {
@@ -82,7 +83,7 @@ export async function vectorizeContent({ contentType, source, settings }) {
         const vecthareSettings = extension_settings.vecthare;
         
         // Enrich chunks with hashes and keywords (shared enrichment)
-        const enrichedChunks = enrichVectorItems(chunks, {
+        let enrichedChunks = enrichVectorItems(chunks, {
             keywordLevel: settings.keywordLevel || 'balanced',
             keywordBaseWeight: settings.keywordBaseWeight || 1.5,
         }, {
@@ -91,8 +92,30 @@ export async function vectorizeContent({ contentType, source, settings }) {
             vecthareSettings,
         });
 
-        // Step 4: Insert into vector store (streaming: embed + write together)
-        progressTracker.updateProgress(4, 'Processing chunks...');
+        // Step 3.5 (incremental only): Filter out already-vectorized chunks
+        if (incremental) {
+            progressTracker.updateProgress(4, 'Checking for existing chunks...');
+            const existingHashes = new Set(await getSavedHashes(collectionId, vecthareSettings));
+            const beforeCount = enrichedChunks.length;
+            enrichedChunks = enrichedChunks.filter(chunk => !existingHashes.has(chunk.hash));
+            const skippedCount = beforeCount - enrichedChunks.length;
+            if (skippedCount > 0) {
+                console.log(`VectHare: Incremental sync skipped ${skippedCount} already-vectorized chunks`);
+            }
+            if (enrichedChunks.length === 0) {
+                progressTracker.complete(true, 'No new chunks to vectorize');
+                return {
+                    success: true,
+                    chunkCount: 0,
+                    skippedCount,
+                    collectionId,
+                };
+            }
+        }
+
+        // Step 4 (or 5 for incremental): Insert into vector store (streaming: embed + write together)
+        const stepsProgress = incremental ? 5 : 4;
+        progressTracker.updateProgress(stepsProgress, 'Processing chunks...');
 
         // Ensure backend is initialized and healthy before attempting inserts.
         // Some backends (LanceDB/Qdrant) require initialization which may fail
@@ -156,6 +179,7 @@ export async function vectorizeContent({ contentType, source, settings }) {
         return {
             success: true,
             chunkCount: enrichedChunks.length,
+            skippedCount: incremental ? (chunks.length - enrichedChunks.length) : 0,
             collectionId,
         };
     } catch (error) {
@@ -450,6 +474,7 @@ function prepareCharacterContent(rawContent, settings) {
 /**
  * Prepares chat content for chunking
  * Maps to the unified chunking strategies in chunking.js
+ * Handles ILS Summary message expansion
  */
 function prepareChatContent(rawContent, settings) {
     const messages = rawContent.messages || rawContent.content;
@@ -464,15 +489,30 @@ function prepareChatContent(rawContent, settings) {
     // Apply text cleaning to messages
     const cleanedMessages = cleanMessages(validMessages);
 
-    // Normalize messages to have consistent properties for chunking.js
-    const normalizedMessages = cleanedMessages.map((m, idx) => ({
-        text: m.mes,
-        mes: m.mes,
-        is_user: m.is_user,
-        name: m.name,
-        index: idx,
-        id: m.send_date || m.id || idx,
-    }));
+    // Normalize messages with ILS Summary expansion
+    // ILS Summaries have extra.ILS_Data.OriginalMessages that should be expanded
+    const normalizedMessages = [];
+    let virtualIndex = 0;
+
+    for (const msg of cleanedMessages) {
+        // Check for ILS Summary - expand into originals + summary
+        if (msg.extra?.ILS_Data?.OriginalMessages && Array.isArray(msg.extra.ILS_Data.OriginalMessages)) {
+            const { expandedMessages, nextVirtualIndex } = expandILSMessage(msg, virtualIndex);
+            normalizedMessages.push(...expandedMessages);
+            virtualIndex = nextVirtualIndex;
+        } else {
+            // Normal message
+            normalizedMessages.push({
+                text: msg.mes,
+                mes: msg.mes,
+                is_user: msg.is_user,
+                name: msg.name,
+                index: virtualIndex,
+                id: msg.send_date || msg.id || virtualIndex,
+            });
+            virtualIndex++;
+        }
+    }
 
     // For per_message strategy - return array of messages for chunking.js
     if (settings.strategy === 'per_message') {
@@ -502,7 +542,7 @@ function prepareChatContent(rawContent, settings) {
     }
 
     // For adaptive or other text strategies - combine into single text
-    const combined = cleanedMessages.map(m => {
+    const combined = normalizedMessages.map(m => {
         const speaker = m.is_user ? 'User' : (m.name || 'Character');
         return `[${speaker}]: ${m.mes}`;
     }).join('\n\n');

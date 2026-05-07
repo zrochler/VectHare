@@ -15,7 +15,7 @@ import { waitUntilCondition, onlyUnique } from '../../../../utils.js';
 import { isUnitStrategy } from './chunking.js';
 import { extractBM25Keywords } from './keyword-boost.js';
 import { cleanText } from './text-cleaning.js';
-import { getStringHash, enrichVectorItems } from './shared-vectorization.js';
+import { getStringHash, enrichVectorItems, expandILSMessage } from './shared-vectorization.js';
 import {
     getSavedHashes,
     insertVectorItems,
@@ -28,7 +28,8 @@ import { isBackendAvailable } from '../backends/backend-manager.js';
 import { applyDecayToResults, applySceneAwareDecay } from './temporal-decay.js';
 import { isChunkDisabledByScene } from './scenes.js';
 import { registerCollection, getCollectionRegistry } from './collection-loader.js';
-import { isCollectionEnabled, filterActiveCollections } from './collection-metadata.js';
+import { isCollectionEnabled, filterActiveCollections, isCollectionAutoSyncEnabled } from './collection-metadata.js';
+import { vectorizeContent } from './content-vectorization.js';
 import { progressTracker } from '../ui/progress-tracker.js';
 import { buildSearchContext, filterChunksByConditions, processChunkLinks } from './conditional-activation.js';
 import { getChunkMetadata, getCollectionMeta } from './collection-metadata.js';
@@ -107,216 +108,6 @@ function prepareItemsForInsertion(items) {
     }));
 }
 
-/**
- * Expands an ILS Summary message into its constituent OriginalMessages plus
- * the summary itself, with virtual indices accounting for expansion.
- *
- * ILS Summaries are inline summary messages (name === 'Summary') that store
- * their original messages in extra.ILS_Data.OriginalMessages. When vectorizing,
- * we want both the originals AND the summary, with correct sequential indices.
- *
- * Example: ILS Summary at virtualIndex 0 covering 3 OriginalMessages:
- *   → OriginalMessage[0] gets virtualIndex 0
- *   → OriginalMessage[1] gets virtualIndex 1
- *   → OriginalMessage[2] gets virtualIndex 2
- *   → Summary gets virtualIndex 3
- *   → nextVirtualIndex returned = 4
- *
- * @param {object} msg - Raw chat message from context.chat
- * @param {number} virtualIndex - The starting virtual index for this message
- * @returns {{ expandedMessages: object[], nextVirtualIndex: number }}
- *   expandedMessages: array of normalized message objects (originals first, summary last)
- *   nextVirtualIndex: the next available virtual index after expansion
- */
-function expandILSMessage(msg, virtualIndex) {
-    const ilsData = msg?.extra?.ILS_Data;
-    const originalMessages = ilsData?.OriginalMessages;
-
-    // Not an ILS Summary — return as-is with a single virtual index
-    if (!originalMessages || !Array.isArray(originalMessages) || originalMessages.length === 0) {
-        return {
-            expandedMessages: [msg],
-            nextVirtualIndex: virtualIndex + 1,
-        };
-    }
-
-    console.log(`[VectHare ILS] Expanding ILS Summary at virtualIndex ${virtualIndex} with ${originalMessages.length} OriginalMessages`);
-
-    const expanded = [];
-    let idx = virtualIndex;
-
-    // 1. Expand OriginalMessages in order
-    for (const orig of originalMessages) {
-        const rawText = String(substituteParams(orig.mes || ''));
-        const text = cleanText(rawText);
-
-        if (orig.extra?.ILS_Data?.OriginalMessages) {
-                // ILS Summaries can be nested, so recursively expand if we encounter another summary in the originals
-                const { expandedMessages, nextVirtualIndex } = expandILSMessage(orig, virtualIndex);
-                expanded.push(...expandedMessages);
-                idx = nextVirtualIndex;
-            } else {
-                expanded.push({
-                    text,
-                    hash: getStringHash(substituteParams(getTextWithoutAttachments(orig))),
-                    index: idx,
-                    is_user: orig.is_user ?? false,
-                    name: orig.name,
-                    // Mark that this came from ILS expansion for traceability
-                    isILSOriginal: faltruese,
-                });
-                idx++;
-            }
-    }
-
-    // 2. Append the summary itself AFTER its originals
-    const summaryText = String(substituteParams(msg.mes || ''));
-    const cleanedSummaryText = cleanText(summaryText);
-    expanded.push({
-        text: cleanedSummaryText,
-        hash: getStringHash(substituteParams(getTextWithoutAttachments(msg))),
-        index: idx,
-        is_user: false,
-        name: 'Summary',
-        // Mark as ILS Summary so chunking strategies can keep it standalone
-        isILSSummary: true,
-    });
-    idx++;
-
-    return {
-        expandedMessages: expanded,
-        nextVirtualIndex: idx,
-    };
-}
-
-/**
- * Groups messages according to chunking strategy
- *
- * HASH DESIGN NOTE: Hashes are calculated from combined text ONLY (not message indices).
- * This is INTENTIONAL semantic deduplication - identical text produces identical embeddings,
- * so storing duplicates would waste storage and query budget. Individual message IDs are
- * preserved in metadata.messageIds and metadata.messageHashes for injection lookup.
- * DO NOT add message indices to hash calculation - it would break incremental sync and
- * disable deduplication with no functional benefit.
- *
- * Note: This function groups messages but DOES NOT compute hashes or extract keywords.
- * Enrichment happens after grouping in synchronizeChat() via enrichVectorItems().
- *
- * @param {object[]} messages Messages to group
- * @param {string} strategy Chunking strategy: 'per_message', 'conversation_turns', 'message_batch'
- * @param {number} batchSize Number of messages per batch (for message_batch strategy)
- * @returns {object[]} Grouped message items (without hashes or keywords)
- */
-function groupMessagesByStrategy(messages, strategy, batchSize = 4) {
-    if (!messages.length) return [];
-
-    switch (strategy) {
-        case 'conversation_turns': {
-            // Group user + AI message pairs
-            const grouped = [];
-            let i = 0;
-            while (i < messages.length) {
-                // handles ILS Summary messages, which are standalone and should not be paired
-                if (messages[i].isILSSummary) {
-                    console.log(`[VectHare Chat Vectorization] Found summary message at index ${i}, treating as separate chunk.`);
-                    const text = messages[i].text || messages[i].mes || '';
-                    grouped.push({
-                        text,
-                        index: messages[i].index ?? messages[i].id,
-                        metadata: {
-                            speaker: '[Summary]',
-                            isUser: false,
-                            messageId: messages[i].index ?? messages[i].id,
-                        },
-                    });
-                    i += 1;
-                    continue;
-                }
-                const pair = [messages[i]];
-                i++;
-                while (i < messages.length) {
-                    if (messages[i].isILSSummary) {
-                        console.log(`[VectHare Chat Vectorization] Found summary message at index ${i}, treating as separate chunk.`);
-                        const text = messages[i].text || messages[i].mes || '';
-                        grouped.push({
-                            text,
-                            index: messages[i].index ?? messages[i].id,
-                            metadata: {
-                                speaker: '[Summary]',
-                                isUser: false,
-                                messageId: messages[i].index ?? messages[i].id,
-                            },
-                        });
-                        i++;
-                    } else {
-                        pair.push(messages[i]);
-                        break;
-                    }
-                }
-                // Combine texts with speaker labels
-                const combinedText = pair.map(m => {
-                    const role = m.is_user ? 'User' : 'Character';
-                    return `[${role}]: ${m.text}`;
-                }).join('\n\n');
-
-                grouped.push({
-                    text: combinedText,
-                    index: pair[0].index,
-                    metadata: {
-                        strategy: 'conversation_turns',
-                        messageIds: pair.map(m => m.index),
-                        messageHashes: pair.map(m => m.hash), // Store individual hashes for injection lookup
-                        startIndex: pair[0].index,
-                        endIndex: pair[pair.length - 1].index
-                    }
-                });
-                i += 2;
-            }
-            return grouped;
-        }
-
-        case 'message_batch': {
-            // Group N messages together
-            const grouped = [];
-            for (let i = 0; i < messages.length; i += batchSize) {
-                const batch = messages.slice(i, i + batchSize);
-                // Combine texts with speaker labels
-                const combinedText = batch.map(m => {
-                    const role = m.is_user ? 'User' : 'Character';
-                    return `[${role}]: ${m.text}`;
-                }).join('\n\n');
-
-                grouped.push({
-                    text: combinedText,
-                    index: batch[0].index,
-                    metadata: {
-                        strategy: 'message_batch',
-                        batchSize: batch.length,
-                        messageIds: batch.map(m => m.index),
-                        messageHashes: batch.map(m => m.hash), // Store individual hashes for injection lookup
-                        startIndex: batch[0].index,
-                        endIndex: batch[batch.length - 1].index
-                    }
-                });
-            }
-            return grouped;
-        }
-
-        case 'per_message':
-        default:
-            // Current behavior - each message is its own item
-            return messages.map(m => ({
-                text: m.text,
-                index: m.index,
-                is_user: m.is_user,
-                metadata: {
-                    strategy: 'per_message',
-                    messageId: m.index,
-                    messageHashes: [m.hash] // Store for injection lookup
-                }
-            }));
-    }
-}
 
 /**
  * Filters out chunks that have been disabled by scene vectorization
@@ -460,30 +251,22 @@ async function rerankWithBananaBread(query, chunks, settings) {
 }
 
 /**
- * Synchronizes chat with vector index using simple FIFO queue
- *
- * How it works:
- * 1. Get all messages, get all vectorized hashes from DB
- * 2. Queue = messages not yet in DB (by hash)
- * 3. Process batch: take message, chunk it, insert chunks, remove from queue
- * 4. Repeat until queue empty
+ * Auto-sync wrapper for chat vectorization.
+ * Coordinates with syncBlocked state and checks auto-sync setting.
+ * Delegates to vectorizeContent with incremental mode.
  *
  * @param {object} settings VectHare settings
- * @param {number} batchSize Number of messages to process per call
+ * @param {number} batchSize Number of messages to process per call (not used in new implementation)
  * @returns {Promise<object>} Progress info
  */
-export async function synchronizeChat(settings, batchSize = 5) {
+export async function autoSyncChat(settings, batchSize = 5) {
     // Build proper collection ID using chat UUID first
     const collectionId = getChatCollectionId();
-    console.log(`🔍 VectHare DEBUG: getChatCollectionId() returned: "${collectionId}"`);
-    console.log(`🔍 VectHare DEBUG: settings.vector_backend = "${settings.vector_backend}"`);
-    console.log(`🔍 VectHare DEBUG: settings.source = "${settings.source}"`);
     if (!collectionId) {
         return { remaining: -1, messagesProcessed: 0, chunksCreated: 0 };
     }
 
-    // Check per-collection autoSync setting instead of global enabled_chats
-    const { isCollectionAutoSyncEnabled } = await import('./collection-metadata.js');
+    // Check per-collection autoSync setting
     if (!isCollectionAutoSyncEnabled(collectionId)) {
         return { remaining: -1, messagesProcessed: 0, chunksCreated: 0 };
     }
@@ -494,6 +277,7 @@ export async function synchronizeChat(settings, batchSize = 5) {
         return { remaining: 0, messagesProcessed: 0, chunksCreated: 0 };
     }
 
+    // Wait until not blocked and not sending
     try {
         await waitUntilCondition(() => !syncBlocked && !is_send_press, 1000);
     } catch {
@@ -509,137 +293,45 @@ export async function synchronizeChat(settings, batchSize = 5) {
             return { remaining: -1, messagesProcessed: 0, chunksCreated: 0 };
         }
 
-        // NOTE: Registration happens AFTER first successful insert to prevent ghosts
-        let isRegistered = false;
+        // Prepare source data for vectorizeContent
+        const source = {
+            type: 'chat',
+            name: context.name || 'Current Chat',
+            messages: context.chat,
+        };
 
-        // Step 1: What's already vectorized? (source of truth = DB)
-        const existingHashes = new Set(await getSavedHashes(collectionId, settings));
-
-        // Step 2: Build list of messages NOT in DB
-        const strategy = settings.chunking_strategy || 'per_message';
-        const strategyBatchSize = settings.batch_size || batchSize;
-
-        // Collect all non-system messages with their data
-        // PERF: Use index from loop instead of indexOf() to avoid O(n²)
-        const allMessages = [];
-        for (let i = 0; i < context.chat.length; i++) {
-            const msg = context.chat[i];
-            if (msg.is_system) continue;
-            // Apply text cleaning to remove HTML tags, metadata blocks, etc.
-            const rawText = String(substituteParams(msg.mes));
-            const text = cleanText(rawText);
-
-            if (msg.extra?.ILS_Data?.OriginalMessages) {
-                const { expandedMessages, nextVirtualIndex } = expandILSMessage(msg, virtualIndex);
-                allMessages.push(...expandedMessages);
-                virtualIndex = nextVirtualIndex;
-            } else {
-                allMessages.push({
-                    text,
-                    hash: getStringHash(substituteParams(getTextWithoutAttachments(msg))),
-                    index: virtualIndex,
-                    is_user: msg.is_user,
-                    name: msg.name,
-                });
-                virtualIndex++;
-            }
-        }
-
-        // Group messages according to strategy
-        const groupedItems = groupMessagesByStrategy(allMessages, strategy, strategyBatchSize);
-
-        // Enrich grouped items with hashes and keywords (shared enrichment)
-        const keywordLevel = settings.keyword_extraction_level || 'balanced';
-        const enrichedItems = enrichVectorItems(groupedItems, {
-            keywordLevel,
+        // Prepare settings for vectorizeContent
+        const vectorizeSettings = {
+            strategy: settings.chunking_strategy || 'per_message',
+            chunkSize: settings.chunk_size,
+            chunkOverlap: settings.chunk_overlap,
+            batchSize: settings.batch_size || batchSize,
+            keywordLevel: settings.keyword_extraction_level || 'balanced',
             keywordBaseWeight: 1.5,
-        }, {
+        };
+
+        // Call vectorizeContent with incremental mode
+        const result = await vectorizeContent({
             contentType: 'chat',
-            vecthareSettings: extension_settings.vecthare,
+            source,
+            settings: vectorizeSettings,
+            incremental: true,  // Enable hash-based deduplication
         });
 
-        // Filter out already vectorized items (by their grouped hash)
-        const queue = new Queue();
-        for (const item of enrichedItems) {
-            if (!existingHashes.has(item.hash)) {
-                queue.enqueue(item);
-            }
-        }
-
-        if (queue.isEmpty()) {
-            return { remaining: 0, messagesProcessed: 0, chunksCreated: 0 };
-        }
-
-        // Step 3: Process batch
-        let itemsProcessed = 0;
-        let chunksCreated = 0;
-        let itemsFailed = 0;
-        const label = strategy === 'per_message' ? 'Message' : 'Group';
-
-        while (!queue.isEmpty() && itemsProcessed < batchSize) {
-            const item = queue.dequeue();
-
-            try {
-                // Prepare item for insertion (add source metadata)
-                const chunks = prepareItemsForInsertion([item]);
-
-                // Insert chunks (insertVectorItems handles duplicates at DB level)
-                if (chunks.length > 0) {
-                    await insertVectorItems(collectionId, chunks, settings, (embedded, total) => {
-                        // Update progress tracker with embedding progress
-                        console.log(`[Chat Vectorization] Embedding progress callback: ${embedded}/${total}`);
-                        progressTracker.updateEmbeddingProgress(embedded, total);
-
-                        // Determine phase based on progress (0-50% = Embedding, 50-100% = Writing)
-                        const progressPercent = (embedded / total) * 100;
-                        const phase = progressPercent <= 50 ? 'Embedding' : 'Writing to database';
-                        progressTracker.updateCurrentItem(`${label} ${itemsProcessed}/${batchSize} - ${phase}: ${embedded}/${total} chunks`);
-                    });
-                    chunksCreated += chunks.length;
-
-                    // Register on first successful insert (prevents ghost collections)
-                    if (!isRegistered) {
-                        // Construct proper registry key: backend:source:collectionId
-                        const backend = settings.vector_backend || 'standard';
-                        const source = settings.source || 'transformers';
-                        const registryKey = `${backend}:${source}:${collectionId}`;
-                        console.log(`🔍 VectHare DEBUG: Registering collection with key: "${registryKey}"`);
-                        console.log(`🔍 VectHare DEBUG: Components: backend="${backend}", source="${source}", collectionId="${collectionId}"`);
-                        registerCollection(registryKey);
-                        isRegistered = true;
-                        console.log(`VectHare: Registered collection ${registryKey} after first successful insert`);
-                    }
-                }
-            } catch (itemError) {
-                // Log error but continue processing other items
-                console.warn(`VectHare: Failed to process item (hash: ${item.hash}, index: ${item.index}):`, itemError.message);
-                itemsFailed++;
-                // Don't rethrow - continue with next item
-            }
-
-            itemsProcessed++;
-            progressTracker.updateCurrentItem(`${label} ${itemsProcessed}/${batchSize}${itemsFailed > 0 ? ` (${itemsFailed} failed)` : ''}`);
-        }
-
-        progressTracker.updateCurrentItem(null);
-
-        if (itemsFailed > 0) {
-            console.warn(`VectHare: Sync completed with ${itemsFailed} failed items out of ${itemsProcessed}`);
-        }
-
         return {
-            remaining: queue.size,
-            messagesProcessed: itemsProcessed,
-            chunksCreated,
-            itemsFailed
+            remaining: 0,
+            messagesProcessed: result.chunkCount,
+            chunksCreated: result.chunkCount,
+            skippedCount: result.skippedCount || 0,
         };
     } catch (error) {
-        console.error('VectHare: Sync failed', error);
-        throw error;
+        console.error('VectHare: autoSyncChat failed', error);
+        return { remaining: -1, messagesProcessed: 0, chunksCreated: 0, error: error.message };
     } finally {
         syncBlocked = false;
     }
 }
+
 
 // ============================================================================
 // REARRANGE CHAT PIPELINE - Helper Functions
@@ -2112,8 +1804,9 @@ export async function rearrangeChat(chat, settings, type) {
 
 /**
  * Vectorizes entire chat
+ * Uses vectorizeContent with incremental mode for efficient deduplication.
  * @param {object} settings VectHare settings
- * @param {number} batchSize Batch size
+ * @param {number} batchSize Batch size (unused, kept for API compatibility)
  */
 export async function vectorizeAll(settings, batchSize) {
     try {
@@ -2146,51 +1839,40 @@ export async function vectorizeAll(settings, batchSize) {
         // Show progress panel
         progressTracker.show('Vectorizing Chat', totalMessages, 'Messages');
 
-        let finished = false;
-        let iteration = 0;
-        let processedCount = 0;
-        let totalChunks = 0;
+        // Prepare source data for vectorizeContent
+        const source = {
+            type: 'chat',
+            name: context.name || 'Current Chat',
+            messages: context.chat,
+        };
 
-        while (!finished) {
-            if (is_send_press) {
-                toastr.info('Message generation is in progress.', 'Vectorization aborted');
-                progressTracker.complete(false, 'Aborted - message generation in progress');
-                throw new Error('Message generation in progress');
-            }
+        // Prepare settings for vectorizeContent
+        const vectorizeSettings = {
+            strategy: settings.chunking_strategy || 'per_message',
+            chunkSize: settings.chunk_size,
+            chunkOverlap: settings.chunk_overlap,
+            batchSize: settings.batch_size || batchSize,
+            keywordLevel: settings.keyword_extraction_level || 'balanced',
+            keywordBaseWeight: 1.5,
+        };
 
-            const result = await synchronizeChat(settings, batchSize);
+        // Call vectorizeContent with incremental mode (deduplicates by hash)
+        const result = await vectorizeContent({
+            contentType: 'chat',
+            source,
+            settings: vectorizeSettings,
+            incremental: true,  // Enable hash-based deduplication
+        });
 
-            // Handle disabled/blocked state
-            if (result.remaining === -1) {
-                console.log('VectHare: Vectorization blocked or disabled');
-                progressTracker.complete(false, 'Blocked or disabled');
-                return;
-            }
-
-            finished = result.remaining <= 0;
-            iteration++;
-
-            // Update progress with actual counts
-            processedCount += result.messagesProcessed;
-            totalChunks += result.chunksCreated;
-
-            progressTracker.updateProgress(
-                processedCount,
-                result.remaining > 0 ? `Processing... ${result.remaining} messages remaining` : 'Finalizing...'
-            );
-            progressTracker.updateChunks(totalChunks);
-
-            console.log(`VectHare: Vectorization iteration ${iteration}, ${result.remaining > 0 ? result.remaining + ' remaining' : 'complete'} (${result.chunksCreated} chunks this batch)`);
-
-            if (chatId !== getCurrentChatId()) {
-                progressTracker.complete(false, 'Chat changed during vectorization');
-                throw new Error('Chat changed');
-            }
+        if (result.success) {
+            const skippedInfo = result.skippedCount ? ` (${result.skippedCount} already vectorized)` : '';
+            progressTracker.complete(true, `Vectorized ${result.chunkCount} chunks${skippedInfo}`);
+            toastr.success(`Chat vectorized successfully: ${result.chunkCount} chunks${skippedInfo}`, 'VectHare');
+            console.log(`VectHare: ✅ Vectorization complete: ${result.chunkCount} chunks${skippedInfo}`);
+        } else {
+            progressTracker.complete(false, 'Vectorization failed');
+            toastr.error('Vectorization failed', 'VectHare');
         }
-
-        progressTracker.complete(true, `Vectorized ${processedCount} messages (${totalChunks} chunks)`);
-        toastr.success('Chat vectorized successfully', 'VectHare');
-        console.log(`VectHare: ✅ Vectorization complete after ${iteration} iterations`);
     } catch (error) {
         console.error('VectHare: Failed to vectorize all', error);
         progressTracker.addError(error.message);

@@ -23,7 +23,7 @@ import { debounce } from '../../../utils.js';
 import { debounce_timeout } from '../../../constants.js';
 
 // VectHare modules - Core
-import { synchronizeChat, rearrangeChat, vectorizeAll } from './core/chat-vectorization.js';
+import { autoSynChat, rearrangeChat, vectorizeAll } from './core/chat-vectorization.js';
 import { purgeAllVectorIndexes, purgeVectorIndex } from './core/core-vector-api.js';
 import { getChatCollectionId } from './core/chat-vectorization.js';
 import { getDefaultDecaySettings } from './core/temporal-decay.js';
@@ -150,7 +150,7 @@ const defaultSettings = {
 let settings = { ...defaultSettings };
 
 // Module worker for automatic syncing
-const moduleWorker = new ModuleWorkerWrapper(() => synchronizeChat(settings, getBatchSize()));
+const moduleWorker = new ModuleWorkerWrapper(() => autoSyncChat(settings, getBatchSize()));
 
 // Batch size based on provider
 const getBatchSize = () => ['transformers', 'ollama'].includes(settings.source) ? 1 : 5;

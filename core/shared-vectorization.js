@@ -34,6 +34,17 @@ export function getStringHash(str) {
 }
 
 /**
+ * Gets message text without file attachments
+ * Matches behavior of ST vectors extension for hash compatibility
+ * @param {object} message Chat message object
+ * @returns {string} Message text without attachment prefix
+ */
+export function getTextWithoutAttachments(message) {
+    const fileLength = message?.extra?.fileLength || 0;
+    return String(message?.mes || '').substring(fileLength).trim();
+}
+
+/**
  * Enriches vector items with hashes and keywords
  * Unified enrichment for both chat and content vectorization pipelines
  *
@@ -152,6 +163,90 @@ export function enrichVectorItems(items, settings, context = {}) {
             },
         };
     });
+}
+
+
+
+/**
+ * Expands an ILS Summary message into its constituent OriginalMessages plus
+ * the summary itself, with virtual indices accounting for expansion.
+ *
+ * ILS Summaries are inline summary messages (name === 'Summary') that store
+ * their original messages in extra.ILS_Data.OriginalMessages. When vectorizing,
+ * we want both the originals AND the summary, with correct sequential indices.
+ *
+ * Example: ILS Summary at virtualIndex 0 covering 3 OriginalMessages:
+ *   → OriginalMessage[0] gets virtualIndex 0
+ *   → OriginalMessage[1] gets virtualIndex 1
+ *   → OriginalMessage[2] gets virtualIndex 2
+ *   → Summary gets virtualIndex 3
+ *   → nextVirtualIndex returned = 4
+ *
+ * @param {object} msg - Raw chat message from context.chat
+ * @param {number} virtualIndex - The starting virtual index for this message
+ * @returns {{ expandedMessages: object[], nextVirtualIndex: number }}
+ *   expandedMessages: array of normalized message objects (originals first, summary last)
+ *   nextVirtualIndex: the next available virtual index after expansion
+ */
+export function expandILSMessage(msg, virtualIndex) {
+    const ilsData = msg?.extra?.ILS_Data;
+    const originalMessages = ilsData?.OriginalMessages;
+
+    // Not an ILS Summary — return as-is with a single virtual index
+    if (!originalMessages || !Array.isArray(originalMessages) || originalMessages.length === 0) {
+        return {
+            expandedMessages: [msg],
+            nextVirtualIndex: virtualIndex + 1,
+        };
+    }
+
+    console.log(`[VectHare ILS] Expanding ILS Summary at virtualIndex ${virtualIndex} with ${originalMessages.length} OriginalMessages`);
+
+    const expanded = [];
+    let idx = virtualIndex;
+
+    // 1. Expand OriginalMessages in order
+    for (const orig of originalMessages) {
+        const rawText = String(substituteParams(orig.mes || ''));
+        const text = cleanText(rawText);
+
+        if (orig.extra?.ILS_Data?.OriginalMessages) {
+                // ILS Summaries can be nested, so recursively expand if we encounter another summary in the originals
+                const { expandedMessages, nextVirtualIndex } = expandILSMessage(orig, virtualIndex);
+                expanded.push(...expandedMessages);
+                idx = nextVirtualIndex;
+            } else {
+                expanded.push({
+                    text,
+                    hash: getStringHash(substituteParams(getTextWithoutAttachments(orig))),
+                    index: idx,
+                    is_user: orig.is_user ?? false,
+                    name: orig.name,
+                    // Mark that this came from ILS expansion for traceability
+                    isILSOriginal: true,
+                });
+                idx++;
+            }
+    }
+
+    // 2. Append the summary itself AFTER its originals
+    const summaryText = String(substituteParams(msg.mes || ''));
+    const cleanedSummaryText = cleanText(summaryText);
+    expanded.push({
+        text: cleanedSummaryText,
+        hash: getStringHash(substituteParams(getTextWithoutAttachments(msg))),
+        index: idx,
+        is_user: false,
+        name: 'Summary',
+        // Mark as ILS Summary so chunking strategies can keep it standalone
+        isILSSummary: true,
+    });
+    idx++;
+
+    return {
+        expandedMessages: expanded,
+        nextVirtualIndex: idx,
+    };
 }
 
 /**
