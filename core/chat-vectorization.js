@@ -690,7 +690,7 @@ function applyThresholdFilter(chunks, threshold, debugData) {
  * @param {object} debugData Debug tracking object
  * @returns {object[]} Chunks with decay applied
  */
-function applyTemporalDecayStage(chunks, chat, settings, threshold, debugData, currentMessageId) {
+function applyTemporalDecayStage(chunks, chat, settings, threshold, debugData) {
     // if (!settings.temporal_decay || !settings.temporal_decay.enabled) {
     //     addTrace(debugData, 'decay', 'Temporal decay skipped (disabled)', { enabled: false });
     //     chunks.forEach(chunk => {
