@@ -823,7 +823,7 @@ function applyTemporalDecayStage(chunks, chat, settings, threshold, debugData) {
     const finalDecayedChunks = result.filter(c => c.decayApplied);
     console.log(`[VectHare Decay Debug] Final result after mapping: ${finalDecayedChunks.length} chunks with decayApplied flag`);
     if (finalDecayedChunks.length > 0 && finalDecayedChunks[0].originalScore) {
-        console.log(`[VectHare Decay Debug] Sample - Hash ${finalDecayedChunks[0].hash.substring(0, 8)}: ${finalDecayedChunks[0].originalScore?.toFixed(4)} → ${finalDecayedChunks[0].score?.toFixed(4)}`);
+        console.log(`[VectHare Decay Debug] Sample - Hash ${finalDecayedChunks[0].hash}: ${finalDecayedChunks[0].originalScore?.toFixed(4)} → ${finalDecayedChunks[0].score?.toFixed(4)}`);
     }
 
     addTrace(debugData, 'decay', 'Temporal decay completed', {
