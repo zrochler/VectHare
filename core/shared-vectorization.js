@@ -11,6 +11,8 @@
  */
 
 import { getStringHash as calculateHash } from '../../../../utils.js';
+import {  substituteParams } from '../../../../../script.js';
+
 import { extractLorebookKeywords, extractTextKeywords, extractBM25Keywords } from './keyword-boost.js';
 import { cleanText } from './text-cleaning.js';
 import { LRUCache } from '../utils/data-structures.js';
