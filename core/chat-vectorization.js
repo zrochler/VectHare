@@ -312,7 +312,7 @@ export async function autoSyncChat(settings, batchSize = 5) {
 
         // Call vectorizeContent with incremental mode
         const result = await vectorizeContent({
-            contentType: 'chat',
+            contentType: 'current',
             source,
             settings: vectorizeSettings,
             incremental: true,  // Enable hash-based deduplication
