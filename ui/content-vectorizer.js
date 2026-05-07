@@ -2472,6 +2472,7 @@ async function startVectorization() {
             contentType: currentContentType,
             source: source,
             settings: currentSettings,
+            showTracker: true,
             incremental: true // Enable hash-based deduplication
         });
 

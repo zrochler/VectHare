@@ -38,7 +38,7 @@ import { getStringHash, enrichVectorItems, expandILSMessage } from './shared-vec
  * @param {object} params.settings - Type-specific settings
  * @returns {Promise<{success: boolean, chunkCount: number, collectionId: string}>}
  */
-export async function vectorizeContent({ contentType, source, settings, incremental = false }) {
+export async function vectorizeContent({ contentType, source, settings, showTracker = false, incremental = false }) {
     const type = getContentType(contentType);
     if (!type) {
         throw new Error(`Unknown content type: ${contentType}`);
@@ -46,7 +46,9 @@ export async function vectorizeContent({ contentType, source, settings, incremen
 
     const sourceName = source.name || source.filename || source.id || contentType;
     const totalSteps = incremental ? 5 : 4;
-    progressTracker.show(`Vectorizing ${type.label || contentType}`, totalSteps, 'Steps');
+    if (showTracker) {
+        progressTracker.show(`Vectorizing ${type.label || contentType}`, totalSteps, 'Steps');
+    }
     progressTracker.updateCurrentItem(sourceName);
 
     try {
