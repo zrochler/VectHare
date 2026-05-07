@@ -16,6 +16,7 @@ import { isUnitStrategy } from './chunking.js';
 import { extractBM25Keywords, extractChatKeywords } from './keyword-boost.js';
 import { cleanText } from './text-cleaning.js';
 import { getStringHash, enrichVectorItems, expandILSMessage } from './shared-vectorization.js';
+import { getDefaultDecaySettings } from './temporal-decay.js';
 import {
     getSavedHashes,
     insertVectorItems,
@@ -1540,6 +1541,7 @@ export async function rearrangeChat(chat, settings, type) {
         debugData.collectionId = activeCollections.length > 0 ? activeCollections.join(', ') : 'world_info_only';
         debugData.collectionsQueried = activeCollections;
         const effectiveTopK = settings.top_k ?? settings.insert;
+        settings.temporal_decay = getDefaultDecaySettings(); // because it's being difficult
         debugData.settings = {
             threshold: settings.score_threshold,
             topK: effectiveTopK,

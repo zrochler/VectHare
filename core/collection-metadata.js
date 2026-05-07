@@ -1112,7 +1112,7 @@ export function getCollectionConditions(collectionId) {
  * Default temporal decay settings
  */
 const defaultTemporalDecay = {
-    enabled: false,
+    enabled: true,
     mode: 'exponential',
     halfLife: 50,
     linearRate: 0.01,
