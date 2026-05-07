@@ -13,7 +13,7 @@ import { getCurrentChatId, is_send_press, setExtensionPrompt, substituteParams, 
 import { getContext, extension_settings } from '../../../../extensions.js';
 import { waitUntilCondition, onlyUnique } from '../../../../utils.js';
 import { isUnitStrategy } from './chunking.js';
-import { extractBM25Keywords } from './keyword-boost.js';
+import { extractBM25Keywords, extractChatKeywords } from './keyword-boost.js';
 import { cleanText } from './text-cleaning.js';
 import { getStringHash, enrichVectorItems, expandILSMessage } from './shared-vectorization.js';
 import {
