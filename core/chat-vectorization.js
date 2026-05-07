@@ -692,15 +692,15 @@ function applyThresholdFilter(chunks, threshold, debugData) {
  * @returns {object[]} Chunks with decay applied
  */
 function applyTemporalDecayStage(chunks, chat, settings, threshold, debugData) {
-    // if (!settings.temporal_decay || !settings.temporal_decay.enabled) {
-    //     addTrace(debugData, 'decay', 'Temporal decay skipped (disabled)', { enabled: false });
-    //     chunks.forEach(chunk => {
-    //         recordChunkFate(debugData, chunk.hash, 'decay', 'passed', 'Decay disabled', {
-    //             score: chunk.score
-    //         });
-    //     });
-    //     return chunks;
-    // }
+    if (!settings.temporal_decay || !settings.temporal_decay.enabled) {
+        addTrace(debugData, 'decay', 'Temporal decay skipped (disabled)', { enabled: false });
+        chunks.forEach(chunk => {
+            recordChunkFate(debugData, chunk.hash, 'decay', 'passed', 'Decay disabled', {
+                score: chunk.score
+            });
+        });
+        return chunks;
+    }
 
     const beforeCount = chunks.length;
     addTrace(debugData, 'decay', 'Starting temporal decay', {
@@ -719,7 +719,13 @@ function applyTemporalDecayStage(chunks, chat, settings, threshold, debugData) {
     // const currentMessageId = chat.length - 1;
     const chunksWithScores = chunks.map(chunk => ({
         hash: chunk.hash,
-        metadata: chunk.metadata,
+        metadata: {
+            ...chunk.metadata,
+            // Ensure messageId is present (fallback to chunk.index if not in metadata)
+            messageId: chunk.metadata?.messageId ?? chunk.index,
+            // Ensure source is set to 'chat' if not already specified
+            source: chunk.metadata?.source || 'chat'
+        },
         score: chunk.score
     }));
 
@@ -747,6 +753,16 @@ function applyTemporalDecayStage(chunks, chat, settings, threshold, debugData) {
     } else {
         decayedChunks = applyDecayToResults(chunksWithScores, currentMessageId, settings.temporal_decay);
         console.log('VectHare: Applied temporal decay to search results');
+    }
+
+    // DEBUG: Verify decay was actually applied
+    const decayedCount = decayedChunks.filter(c => c.decayApplied || c.sceneAwareDecay).length;
+    const scoreChanges = decayedChunks.filter(c => c.decayApplied && c.originalScore && c.score < c.originalScore);
+    console.log(`[VectHare Decay Debug] Applied decay to ${decayedCount} chunks, ${scoreChanges.length} had scores reduced`);
+    if (scoreChanges.length > 0) {
+        scoreChanges.slice(0, 3).forEach(c => {
+            console.log(`  - Hash ${c.hash.substring(0, 8)}: ${c.originalScore?.toFixed(4)} → ${c.score?.toFixed(4)} (age: ${c.messageAge})`);
+        });
     }
 
     decayedChunks.sort((a, b) => b.score - a.score);
@@ -802,6 +818,13 @@ function applyTemporalDecayStage(chunks, chat, settings, threshold, debugData) {
 
     // Re-filter by threshold after decay
     result = result.filter(c => c.score >= threshold);
+
+    // DEBUG: Verify final result has updated scores
+    const finalDecayedChunks = result.filter(c => c.decayApplied);
+    console.log(`[VectHare Decay Debug] Final result after mapping: ${finalDecayedChunks.length} chunks with decayApplied flag`);
+    if (finalDecayedChunks.length > 0 && finalDecayedChunks[0].originalScore) {
+        console.log(`[VectHare Decay Debug] Sample - Hash ${finalDecayedChunks[0].hash.substring(0, 8)}: ${finalDecayedChunks[0].originalScore?.toFixed(4)} → ${finalDecayedChunks[0].score?.toFixed(4)}`);
+    }
 
     addTrace(debugData, 'decay', 'Temporal decay completed', {
         decayType,
