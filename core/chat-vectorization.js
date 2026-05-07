@@ -295,7 +295,7 @@ export async function autoSyncChat(settings, batchSize = 5) {
 
         // Prepare source data for vectorizeContent
         const source = {
-            type: 'chat',
+            type: 'current',
             name: context.name || 'Current Chat',
             messages: context.chat,
         };
@@ -312,7 +312,7 @@ export async function autoSyncChat(settings, batchSize = 5) {
 
         // Call vectorizeContent with incremental mode
         const result = await vectorizeContent({
-            contentType: 'current',
+            contentType: 'chat',
             source,
             settings: vectorizeSettings,
             incremental: true,  // Enable hash-based deduplication
