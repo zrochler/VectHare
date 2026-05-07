@@ -690,7 +690,7 @@ function applyThresholdFilter(chunks, threshold, debugData) {
  * @param {object} debugData Debug tracking object
  * @returns {object[]} Chunks with decay applied
  */
-function applyTemporalDecayStage(chunks, chat, settings, threshold, debugData) {
+function applyTemporalDecayStage(chunks, chat, settings, threshold, debugData, currentMessageId) {
     // if (!settings.temporal_decay || !settings.temporal_decay.enabled) {
     //     addTrace(debugData, 'decay', 'Temporal decay skipped (disabled)', { enabled: false });
     //     chunks.forEach(chunk => {
@@ -709,7 +709,13 @@ function applyTemporalDecayStage(chunks, chat, settings, threshold, debugData) {
         strength: settings.temporal_decay.strength || settings.temporal_decay.rate
     });
 
-    const currentMessageId = chat.length - 1;
+    let currentMessageId = 0;
+    for (const msg of chat) {
+        const { expandedMessages, nextVirtualIndex } = expandILSMessage(msg, currentMessageId);
+        currentMessageId = nextVirtualIndex;
+    }
+
+    // const currentMessageId = chat.length - 1;
     const chunksWithScores = chunks.map(chunk => ({
         hash: chunk.hash,
         metadata: chunk.metadata,
