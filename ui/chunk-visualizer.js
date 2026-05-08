@@ -64,11 +64,35 @@ let selectedHashes = new Set();
 let hasUnsavedChanges = false;
 let pendingChanges = new Map(); // hash -> {keywords, enabled, conditions, etc.}
 let plaintextKeywordMode = false; // Toggle for plaintext keyword editing
-let activeTab = 'chunks'; // 'chunks' or 'scenes'
+let activeTab = 'chunks'; // 'chunks', 'scenes', or 'groups'
+
+// Mobile-responsive state
+let responsiveMode = false; // true on mobile (<768px), false on desktop
+let mobileDetailTab = false; // true if on detail tab view (mobile only)
 
 // ============================================================================
 // COLLECTION TYPE HELPERS
 // ============================================================================
+
+/**
+ * Checks if current viewport is mobile (<768px)
+ * @returns {boolean}
+ */
+function isMobileViewport() {
+    return window.innerWidth < 768;
+}
+
+function showMobileGroupDetailPanel() {
+    if (!isMobileViewport()) return;
+    $('.vecthare-group-list-panel').hide();
+    $('#vecthare_group_detail').addClass('visible');
+}
+
+function hideMobileGroupDetailPanel() {
+    if (!isMobileViewport()) return;
+    $('.vecthare-group-list-panel').show();
+    $('#vecthare_group_detail').removeClass('visible');
+}
 
 /**
  * Checks if the current collection is a chat collection (supports scenes)
@@ -264,6 +288,8 @@ export function openVisualizer(results, collectionId, settings) {
     pendingChanges.clear();
     hasUnsavedChanges = false;
     activeTab = 'chunks'; // Reset to chunks tab on open
+    responsiveMode = isMobileViewport(); // Detect responsive mode
+    mobileDetailTab = false; // Reset mobile detail view
 
     // Process chunks - add unique identifier for each chunk
     allChunks = (results?.chunks || []).map((chunk, idx) => ({
@@ -538,6 +564,10 @@ function renderScenesTab() {
 
     renderSceneList();
     bindScenesTabEvents();
+
+    if (isMobileViewport()) {
+        hideMobileSceneDetailPanel();
+    }
 }
 
 /**
@@ -633,6 +663,11 @@ function renderSceneDetailPanel() {
         <!-- Header -->
         <div class="vecthare-detail-header">
             <div class="vecthare-detail-name-section">
+                ${isMobileViewport() ? `
+                    <button class="vecthare-detail-back-btn" id="vecthare_scene_back" title="Back to scenes list">
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                ` : ''}
                 <input type="text" class="vecthare-chunk-name-input" id="vecthare_scene_title"
                        placeholder="Scene title..."
                        value="${escapeHtml(title)}">
@@ -727,6 +762,7 @@ function bindScenesTabEvents() {
         selectedSceneHash = hash;
         renderSceneList();
         renderSceneDetailPanel();
+        showMobileSceneDetailPanel();
     });
 }
 
@@ -803,6 +839,11 @@ function bindSceneDetailEvents() {
         navigator.clipboard.writeText(hash).then(() => {
             toastr.info('Hash copied to clipboard');
         });
+    });
+
+    // Mobile back button
+    $('#vecthare_scene_back').off('click').on('click', function() {
+        hideMobileSceneDetailPanel();
     });
 
     // Delete scene - removes chunk from vector DB and re-enables contained chunks
@@ -960,11 +1001,19 @@ function renderGroupDetailPanel() {
     container.html(`
         <div class="vecthare-group-detail-content">
             <div class="vecthare-group-detail-header">
-                <input type="text" class="vecthare-group-name-input" id="vecthare_group_name"
-                       value="${escapeHtml(group.name)}" placeholder="Group name">
-                <button class="vecthare-btn-danger" id="vecthare_delete_group" title="Delete group">
-                    <i class="fa-solid fa-trash"></i>
-                </button>
+                <div class="vecthare-group-detail-headline">
+                    ${isMobileViewport() ? `
+                        <button class="vecthare-group-detail-back-btn" id="vecthare_group_back" title="Back to groups">
+                            <i class="fa-solid fa-chevron-left"></i>
+                        </button>
+                    ` : ''}
+                    <div class="vecthare-group-detail-title">${escapeHtml(group.name)}</div>
+                </div>
+                <div class="vecthare-group-detail-actions">
+                    <button class="vecthare-btn-danger" id="vecthare_delete_group" title="Delete group">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
             </div>
 
             <div class="vecthare-group-settings">
@@ -1152,6 +1201,9 @@ function createNewGroup() {
     saveGroups(groups);
     selectedGroupId = newGroup.id;
     renderGroupsTab();
+    if (isMobileViewport()) {
+        showMobileGroupDetailPanel();
+    }
     toastr.success('Group created');
 }
 
@@ -1206,6 +1258,7 @@ function bindGroupsTabEvents() {
         selectedGroupId = $(this).data('group-id');
         renderGroupList();
         renderGroupDetailPanel();
+        showMobileGroupDetailPanel();
     });
 }
 
@@ -1246,6 +1299,11 @@ function bindGroupDetailEvents() {
 
     // Add member
     $('#vecthare_add_group_member').off('click').on('click', openAddMemberDialog);
+
+    // Mobile back button
+    $('#vecthare_group_back').off('click').on('click', function() {
+        hideMobileGroupDetailPanel();
+    });
 
     // Remove member
     $('.vecthare-member-remove').off('click').on('click', function(e) {
@@ -1385,6 +1443,12 @@ function renderDetailPanel() {
     panel.html(`
         <!-- Header -->
         <div class="vecthare-detail-header">
+            <!-- Mobile back button -->
+            ${isMobileViewport() ? `
+                <button class="vecthare-detail-back-btn" id="vecthare_detail_back" title="Back to list">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </button>
+            ` : ''}
             <!-- Chunk Name - Primary/Biggest -->
             <div class="vecthare-detail-name-section">
                 <input type="text" class="vecthare-chunk-name-input" id="vecthare_chunk_name"
@@ -1658,6 +1722,22 @@ function bindEvents() {
         $('.vecthare-vis-tab-content').removeClass('active');
         $(`.vecthare-vis-tab-content[data-tab="${tab}"]`).addClass('active');
 
+        // Mobile: When switching to chunks, scenes, or groups, show the list panel by default
+        if (isMobileViewport()) {
+            if (tab === 'chunks') {
+                $('.vecthare-chunk-list-panel').show();
+                $('.vecthare-chunk-detail-panel').hide();
+                mobileDetailTab = false;
+            }
+            if (tab === 'scenes') {
+                $('.vecthare-scene-list-panel').show();
+                $('#vecthare_scene_detail').removeClass('visible');
+            }
+            if (tab !== 'groups') {
+                hideMobileGroupDetailPanel();
+            }
+        }
+
         // Render tab content when switching
         if (tab === 'scenes') {
             renderScenesTab();
@@ -1707,6 +1787,13 @@ function bindEvents() {
         selectedChunkId = uid;
         renderChunkList();
         renderDetailPanel();
+
+        // Mobile: Hide list panel, show detail panel on mobile when chunk is selected
+        if (isMobileViewport()) {
+            $('.vecthare-chunk-list-panel').hide();
+            $('.vecthare-chunk-detail-panel').show();
+            mobileDetailTab = true;
+        }
     });
 
     // Load more
@@ -1841,6 +1928,15 @@ function bindDetailEvents() {
         $('#vecthare_chunk_depth_value').text(depth);
         chunk.data.depth = depth;
         updateChunkData(chunk.hash, { depth: chunk.data.depth });
+    });
+
+    // Mobile: Back button (show list, hide detail)
+    $('#vecthare_detail_back').on('click', function() {
+        if (isMobileViewport()) {
+            $('.vecthare-chunk-list-panel').show();
+            $('.vecthare-chunk-detail-panel').hide();
+            mobileDetailTab = false;
+        }
     });
 
     // Delete chunk

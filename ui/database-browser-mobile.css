@@ -1,0 +1,327 @@
+/**
+ * ============================================================================
+ * VECTHARE DATABASE BROWSER - MOBILE ENHANCEMENTS
+ * ============================================================================
+ * Mobile-friendly improvements for the database browser modal
+ * Improves touch targets, reduces whitespace, and optimizes layout
+ *
+ * @version 1.0.0-mobile
+ * ============================================================================ */
+
+/* ============================================================================
+   MOBILE CONTAINER ADJUSTMENTS
+   ============================================================================ */
+
+/* Mobile: Full viewport modal */
+@media (max-width: 767px) {
+  .vecthare-database-browser-content {
+    width: 100vw;
+    max-width: 100%;
+    height: 100vh;
+    max-height: 100%;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .vecthare-database-browser-header {
+    padding: 12px 16px;
+    min-height: 48px;
+  }
+
+  .vecthare-browser-title {
+    font-size: 16px;
+  }
+
+  .vecthare-browser-close {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 6px;
+    font-size: 18px;
+  }
+}
+
+/* ============================================================================
+   TABS - MOBILE RESPONSIVE
+   ============================================================================ */
+
+@media (max-width: 767px) {
+  .vecthare-browser-tabs {
+    padding: 8px;
+    gap: 4px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .vecthare-tab-btn {
+    padding: 10px 12px;
+    font-size: 12px;
+    min-height: 40px;
+    flex: 0 0 auto;
+  }
+
+  .vecthare-tab-btn::before {
+    width: 6px;
+    height: 6px;
+    top: 6px;
+  }
+}
+
+/* ============================================================================
+   FILTERS - MOBILE RESPONSIVE
+   ============================================================================ */
+
+@media (max-width: 767px) {
+  .vecthare-filter-group {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .vecthare-filter-label {
+    font-size: 11px;
+    padding: 4px 6px;
+  }
+
+  .vecthare-filter-value {
+    font-size: 12px;
+    padding: 6px 8px;
+    min-height: 36px;
+  }
+
+  .vecthare-scope-filters,
+  .vecthare-type-filters {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .vecthare-scope-filter-btn,
+  .vecthare-type-filter-btn {
+    min-height: 36px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+
+/* ============================================================================
+   SEARCH - MOBILE RESPONSIVE
+   ============================================================================ */
+
+@media (max-width: 767px) {
+  .vecthare-search-container {
+    padding: 10px 12px;
+  }
+
+  .vecthare-search-input {
+    min-height: 40px;
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+
+  .vecthare-search-icon {
+    font-size: 14px;
+  }
+}
+
+/* ============================================================================
+   COLLECTION CARDS - MOBILE RESPONSIVE
+   ============================================================================ */
+
+@media (max-width: 767px) {
+  .vecthare-collection-list {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .vecthare-collection-card {
+    padding: 12px;
+    border-radius: 6px;
+  }
+
+  .vecthare-collection-header {
+    gap: 8px;
+  }
+
+  .vecthare-collection-icon {
+    font-size: 18px;
+    min-width: 32px;
+  }
+
+  .vecthare-collection-name {
+    font-size: 14px;
+  }
+
+  .vecthare-collection-type-badge {
+    font-size: 10px;
+    padding: 2px 4px;
+  }
+
+  .vecthare-collection-stats {
+    font-size: 11px;
+    gap: 6px;
+  }
+
+  .vecthare-collection-stat-item {
+    gap: 2px;
+  }
+
+  .vecthare-collection-actions {
+    gap: 4px;
+  }
+
+  .vecthare-collection-action-btn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 4px;
+    font-size: 12px;
+  }
+}
+
+/* ============================================================================
+   BULK OPERATIONS - MOBILE RESPONSIVE
+   ============================================================================ */
+
+@media (max-width: 767px) {
+  .vecthare-bulk-operations {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .vecthare-bulk-count {
+    font-size: 12px;
+  }
+
+  .vecthare-bulk-btn {
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
+
+/* ============================================================================
+   STATS FOOTER - MOBILE RESPONSIVE
+   ============================================================================ */
+
+@media (max-width: 767px) {
+  .vecthare-browser-stats {
+    padding: 10px 12px;
+    font-size: 11px;
+    gap: 8px;
+  }
+
+  .vecthare-browser-stat {
+    gap: 3px;
+  }
+}
+
+/* ============================================================================
+   DIALOGS & MODALS - MOBILE RESPONSIVE
+   ============================================================================ */
+
+/* Model switcher, rename dialog, etc. should also be full viewport on mobile */
+@media (max-width: 767px) {
+  .vecthare-modal-overlay {
+    padding: 0;
+  }
+
+  .vecthare-modal-container {
+    width: 100vw;
+    max-width: 100%;
+    border-radius: 0;
+  }
+
+  .vecthare-modal-header {
+    padding: 12px 16px;
+    min-height: 48px;
+  }
+
+  .vecthare-modal-body {
+    padding: 12px;
+  }
+
+  .vecthare-modal-footer {
+    padding: 12px 16px;
+    min-height: 48px;
+    gap: 8px;
+  }
+
+  .vecthare-modal-btn {
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
+
+/* ============================================================================
+   TOUCH TARGET IMPROVEMENTS
+   ============================================================================ */
+
+@media (max-width: 767px) {
+  /* Ensure all clickable elements are at least 40-44px */
+  .vecthare-collection-action-btn,
+  .vecthare-type-filter-btn,
+  .vecthare-scope-filter-btn,
+  .vecthare-tab-btn,
+  .vecthare-browser-close,
+  .vecthare-modal-close,
+  button[class*="vecthare"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* ============================================================================
+   ACCESSIBILITY - MOBILE
+   ============================================================================ */
+
+@media (max-width: 767px) {
+  .vecthare-tab-btn:focus-visible,
+  .vecthare-collection-action-btn:focus-visible,
+  .vecthare-scope-filter-btn:focus-visible,
+  .vecthare-type-filter-btn:focus-visible,
+  .vecthare-search-input:focus-visible {
+    outline: 2px solid var(--vecthare-primary);
+    outline-offset: 2px;
+  }
+}
+
+/* Reduced motion on mobile */
+@media (max-width: 767px) and (prefers-reduced-motion: reduce) {
+  .vecthare-collection-card,
+  .vecthare-collection-action-btn,
+  .vecthare-tab-btn,
+  .vecthare-scope-filter-btn,
+  .vecthare-type-filter-btn {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* ============================================================================
+   LANDSCAPE MODE (OPTIONAL) - Treat as desktop
+   ============================================================================ */
+
+@media (max-height: 500px) and (orientation: landscape) {
+  /* On very short landscape, use more compact spacing */
+  .vecthare-database-browser-content {
+    max-height: 100vh;
+  }
+
+  .vecthare-browser-tabs {
+    padding: 6px;
+    gap: 2px;
+  }
+
+  .vecthare-tab-btn {
+    padding: 8px 10px;
+  }
+
+  .vecthare-filter-group {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .vecthare-collection-card {
+    padding: 8px;
+  }
+}

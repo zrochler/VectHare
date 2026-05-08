@@ -1,0 +1,588 @@
+/**
+ * ============================================================================
+ * VECTHARE RESPONSIVE MODAL LAYOUT
+ * ============================================================================
+ * Modal layout pattern with fixed header, scrollable body, and sticky footer
+ * Prevents content from being trapped by scroll interactions.
+ *
+ * Typical structure:
+ * .resp-modal-content
+ *   ├─ .resp-modal-header (sticky, fixed position relative to modal)
+ *   ├─ .resp-modal-body (scrollable)
+ *   └─ .resp-modal-footer (sticky, stays at bottom)
+ *
+ * @version 1.0.0
+ * ============================================================================
+ */
+
+/* ============================================================================
+   MODAL OVERLAY & CONTAINER
+   ============================================================================ */
+
+/**
+ * Modal overlay (semi-transparent background)
+ * Positioned behind the modal, covers entire viewport
+ */
+.resp-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end; /* Slide up from bottom on mobile */
+  justify-content: center;
+  opacity: 0;
+  animation: resp-modal-overlay-in 200ms ease forwards;
+}
+
+@keyframes resp-modal-overlay-in {
+  to {
+    opacity: 1;
+  }
+}
+
+.resp-modal-overlay.closing {
+  animation: resp-modal-overlay-out 200ms ease forwards;
+}
+
+@keyframes resp-modal-overlay-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* ============================================================================
+   MODAL WINDOW
+   ============================================================================ */
+
+/**
+ * Main modal container
+ * Mobile: Full viewport (100vw, 100vh or max available)
+ * Desktop: Centered, constrained width
+ */
+.resp-modal-content {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  max-width: 100%;
+  max-height: 100%;
+  background: var(--vecthare-bg-primary, #fff);
+  box-shadow: none;
+  border-radius: 0;
+  box-sizing: border-box;
+  animation: resp-modal-in 200ms ease forwards;
+  z-index: 1001;
+}
+
+@keyframes resp-modal-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.resp-modal-content.closing {
+  animation: resp-modal-out 200ms ease forwards;
+}
+
+@keyframes resp-modal-out {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+/* Desktop: Centered modal with constrained width */
+@media (min-width: 768px) {
+  .resp-modal-content {
+    width: 90vw;
+    height: auto;
+    max-height: 90vh;
+    max-width: 1000px;
+    border-radius: 8px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+                0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  }
+
+  .resp-modal-overlay {
+    align-items: center;
+  }
+
+  @keyframes resp-modal-in {
+    from {
+      transform: scale(0.95);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes resp-modal-out {
+    to {
+      transform: scale(0.95);
+      opacity: 0;
+    }
+  }
+}
+
+/* ============================================================================
+   MODAL HEADER
+   ============================================================================ */
+
+/**
+ * Modal header - sticky at top
+ * Contains title and close/action buttons
+ * Never scrolls out of view
+ */
+.resp-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--vecthare-bg-primary, #fff);
+  border-bottom: 1px solid var(--vecthare-border, #e5e5e5);
+  flex-shrink: 0;
+  min-height: 56px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* Mobile: Tighter padding, minimum height for touch */
+@media (max-width: 767px) {
+  .resp-modal-header {
+    padding: 10px 12px;
+    min-height: 48px;
+    gap: 8px;
+  }
+}
+
+/* Desktop: Comfortable spacing */
+@media (min-width: 768px) {
+  .resp-modal-header {
+    padding: 16px 20px;
+    min-height: 60px;
+  }
+}
+
+/**
+ * Modal title (left side of header)
+ * Flex: 1 to take available space
+ */
+.resp-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-width: 0; /* Allow truncation */
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--vecthare-text-primary, #333);
+}
+
+/* Mobile: Smaller text */
+@media (max-width: 767px) {
+  .resp-modal-title {
+    font-size: 16px;
+    gap: 8px;
+  }
+}
+
+/**
+ * Icon within title
+ */
+.resp-modal-title-icon {
+  flex-shrink: 0;
+  font-size: 20px;
+}
+
+/* ============================================================================
+   MODAL BODY (SCROLLABLE CONTENT)
+   ============================================================================ */
+
+/**
+ * Main scrollable content area
+ * Flex: 1 1 auto allows it to grow and scroll
+ * min-height: 0 ensures flex sizing works
+ */
+.resp-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch; /* iOS momentum scrolling */
+  padding: 16px;
+  background: var(--vecthare-bg-primary, #fff);
+}
+
+/* Mobile: Reduced padding */
+@media (max-width: 767px) {
+  .resp-modal-body {
+    padding: 12px;
+  }
+}
+
+/* Desktop: More generous padding */
+@media (min-width: 768px) {
+  .resp-modal-body {
+    padding: 20px;
+  }
+}
+
+/* ============================================================================
+   MODAL FOOTER
+   ============================================================================ */
+
+/**
+ * Modal footer - sticky at bottom
+ * Contains action buttons, close button, or status text
+ * Never scrolls out of view
+ */
+.resp-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--vecthare-bg-secondary, #fafafa);
+  border-top: 1px solid var(--vecthare-border, #e5e5e5);
+  flex-shrink: 0;
+  min-height: 56px;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
+/* Mobile: Reduced padding, stack buttons vertically if needed */
+@media (max-width: 767px) {
+  .resp-modal-footer {
+    padding: 10px 12px;
+    min-height: 48px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+/* Desktop: Comfortable spacing */
+@media (min-width: 768px) {
+  .resp-modal-footer {
+    padding: 16px 20px;
+    min-height: 60px;
+  }
+}
+
+/**
+ * Footer button container
+ * Flex layout for button groups
+ */
+.resp-modal-footer-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
+@media (max-width: 767px) {
+  .resp-modal-footer-actions {
+    width: 100%;
+    gap: 6px;
+  }
+}
+
+/* ============================================================================
+   MODAL BODY SECTIONS
+   ============================================================================ */
+
+/**
+ * Main section container within body
+ * Add vertical rhythm between sections
+ */
+.resp-modal-section {
+  margin-bottom: 20px;
+}
+
+.resp-modal-section:last-child {
+  margin-bottom: 0;
+}
+
+/**
+ * Section title/heading
+ */
+.resp-modal-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--vecthare-text-secondary, #666);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--vecthare-border, #e5e5e5);
+}
+
+/**
+ * Section content
+ */
+.resp-modal-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ============================================================================
+   CLOSE BUTTON
+   ============================================================================ */
+
+/**
+ * Close button in modal header (typically ✕ icon)
+ * Large touch target on mobile
+ */
+.resp-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--vecthare-text-secondary, #666);
+  cursor: pointer;
+  font-size: 20px;
+  font-weight: bold;
+  transition: all 200ms ease;
+  flex-shrink: 0;
+}
+
+.resp-modal-close:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--vecthare-text-primary, #333);
+}
+
+/* Mobile: Already 48px */
+@media (min-width: 768px) {
+  .resp-modal-close {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 6px;
+  }
+}
+
+/* ============================================================================
+   MODAL BUTTONS
+   ============================================================================ */
+
+/**
+ * Primary action button in modal
+ */
+.resp-modal-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 8px 16px;
+  background: var(--vecthare-primary, #2563eb);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: all 200ms ease;
+  white-space: nowrap;
+}
+
+.resp-modal-btn-primary:hover {
+  background: var(--vecthare-primary-hover, #1d4ed8);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3);
+}
+
+.resp-modal-btn-primary:active {
+  transform: translateY(0);
+}
+
+/* Mobile: Larger touch target */
+@media (max-width: 767px) {
+  .resp-modal-btn-primary {
+    min-height: 44px;
+    padding: 10px 18px;
+    font-size: 15px;
+  }
+}
+
+/**
+ * Secondary action button
+ */
+.resp-modal-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 8px 16px;
+  background: var(--vecthare-bg-secondary, #f5f5f5);
+  color: var(--vecthare-text-primary, #333);
+  border: 1px solid var(--vecthare-border, #ddd);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: all 200ms ease;
+  white-space: nowrap;
+}
+
+.resp-modal-btn-secondary:hover {
+  background: var(--vecthare-bg-tertiary, #e5e5e5);
+  border-color: var(--vecthare-border-hover, #999);
+}
+
+.resp-modal-btn-secondary:active {
+  transform: scale(0.98);
+}
+
+/* Mobile: Larger touch target */
+@media (max-width: 767px) {
+  .resp-modal-btn-secondary {
+    min-height: 44px;
+    padding: 10px 18px;
+    font-size: 15px;
+  }
+}
+
+/**
+ * Danger/destructive button
+ */
+.resp-modal-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 8px 16px;
+  background: var(--vecthare-danger, #ef4444);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: all 200ms ease;
+  white-space: nowrap;
+}
+
+.resp-modal-btn-danger:hover {
+  background: var(--vecthare-danger-hover, #dc2626);
+}
+
+.resp-modal-btn-danger:active {
+  transform: scale(0.98);
+}
+
+/* Mobile: Larger touch target */
+@media (max-width: 767px) {
+  .resp-modal-btn-danger {
+    min-height: 44px;
+    padding: 10px 18px;
+    font-size: 15px;
+  }
+}
+
+/* ============================================================================
+   MODAL ANIMATIONS
+   ============================================================================ */
+
+/**
+ * Fade in animation for overlay
+ */
+@keyframes resp-modal-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/**
+ * Fade out animation
+ */
+@keyframes resp-modal-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* ============================================================================
+   ACCESSIBILITY
+   ============================================================================ */
+
+/**
+ * Focus visible for keyboard navigation
+ */
+.resp-modal-close:focus-visible,
+.resp-modal-btn-primary:focus-visible,
+.resp-modal-btn-secondary:focus-visible,
+.resp-modal-btn-danger:focus-visible {
+  outline: 2px solid var(--vecthare-primary, #2563eb);
+  outline-offset: 2px;
+}
+
+/**
+ * Reduced motion support
+ */
+@media (prefers-reduced-motion: reduce) {
+  .resp-modal-overlay,
+  .resp-modal-content,
+  .resp-modal-close,
+  .resp-modal-btn-primary,
+  .resp-modal-btn-secondary,
+  .resp-modal-btn-danger {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ============================================================================
+   SPLIT-PANEL MODAL (Header + Tabs + Body)
+   ============================================================================ */
+
+/**
+ * Complete modal structure with header, tab navigation, and body
+ * Typical structure:
+ * .resp-modal-content
+ *   ├─ .resp-modal-header
+ *   ├─ .resp-tabs
+ *   ├─ .resp-modal-body (contains tab-content divs)
+ *   └─ .resp-modal-footer (optional)
+ */
+
+.resp-modal-with-tabs .resp-modal-body {
+  padding: 0;
+}
+
+.resp-modal-with-tabs .resp-tab-content {
+  padding: 16px;
+}
+
+@media (max-width: 767px) {
+  .resp-modal-with-tabs .resp-tab-content {
+    padding: 12px;
+  }
+}

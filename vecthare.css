@@ -10,6 +10,10 @@
 /* Base styles - variables, icons, container */
 @import url('./styles/base.css');
 
+/* Responsive layout utilities - used by all responsive components */
+@import url('./styles/responsive-utils.css');
+@import url('./styles/responsive-modal.css');
+
 /* Component styles */
 @import url('./styles/cards.css');
 @import url('./styles/forms.css');
@@ -24,9 +28,13 @@
 /* UI component styles */
 @import url('./ui/diagnostics.css');
 @import url('./ui/database-browser.css');
+@import url('./ui/database-browser-mobile.css');
 @import url('./ui/chunk-visualizer.css');
+@import url('./ui/chunk-visualizer-mobile.css');
 @import url('./ui/content-vectorizer.css');
 @import url('./ui/scenes.css');
+@import url('./ui/scenes-mobile.css');
+@import url('./ui/groups-mobile.css');
 @import url('./ui/search-debug.css');
 @import url('./ui/text-cleaning-manager.css');
 @import url('./ui/health-dashboard.css');

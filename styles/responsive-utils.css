@@ -1,0 +1,589 @@
+/**
+ * ============================================================================
+ * VECTHARE RESPONSIVE UTILITIES
+ * ============================================================================
+ * Mobile-first utility classes for building responsive modals, panels, and
+ * layouts across chunk visualizer, scenes panel, groups panel, and database
+ * browser. Reusable patterns for touch-friendly interfaces.
+ *
+ * Breakpoints:
+ *  - Mobile:  < 768px
+ *  - Tablet:  768px - 1024px
+ *  - Desktop: ≥ 1024px
+ *
+ * @version 1.0.0
+ * ============================================================================
+ */
+
+/* ============================================================================
+   VIEWPORT & CONTAINER
+   ============================================================================ */
+
+/**
+ * Full viewport container (typically modal or panel)
+ * Prevents overflow bleeding on mobile
+ */
+.resp-full-viewport {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/**
+ * Responsive container with safe margins
+ * Prevents edge-bleed on small screens
+ */
+.resp-container {
+  width: 100%;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Mobile (< 768px): Full width with touch padding */
+@media (max-width: 767px) {
+  .resp-container {
+    max-width: 100%;
+    padding: 0;
+  }
+}
+
+/* Desktop (≥ 768px): Comfortable spacing */
+@media (min-width: 768px) {
+  .resp-container {
+    max-width: 95%;
+    margin: 0 auto;
+  }
+}
+
+/* ============================================================================
+   TAB NAVIGATION
+   ============================================================================ */
+
+/**
+ * Tab bar container
+ * Sticky at top, horizontal scroll on mobile if needed
+ */
+.resp-tabs {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  background: var(--vecthare-bg-secondary, #f5f5f5);
+  border-bottom: 1px solid var(--vecthare-border, #ddd);
+  padding: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch; /* iOS momentum scrolling */
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  flex-wrap: nowrap;
+}
+
+/* Desktop: Allow tab wrapping if many tabs */
+@media (min-width: 768px) {
+  .resp-tabs {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px;
+  }
+}
+
+/**
+ * Individual tab item (button)
+ * Minimum 44px touch target on mobile
+ */
+.resp-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--vecthare-text-secondary, #666);
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 200ms ease;
+}
+
+/* Hover state */
+.resp-tab-item:hover {
+  color: var(--vecthare-text-primary, #333);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* Active state */
+.resp-tab-item.active {
+  color: var(--vecthare-primary, #2563eb);
+  border-bottom-color: var(--vecthare-primary, #2563eb);
+}
+
+/* Mobile: Larger touch targets */
+@media (max-width: 767px) {
+  .resp-tab-item {
+    min-height: 48px;
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+}
+
+/**
+ * Tab content container
+ * Hidden by default, shown when active
+ */
+.resp-tab-content {
+  display: none;
+  width: 100%;
+  height: 100%;
+}
+
+.resp-tab-content.active {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ============================================================================
+   SPLIT-PANEL LAYOUT (Desktop) / TABS (Mobile)
+   ============================================================================ */
+
+/**
+ * Split-panel container
+ * Desktop: Horizontal split (flex row)
+ * Mobile: Single column (hidden, shown via tabs)
+ */
+.resp-split-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  gap: 0;
+}
+
+/* Desktop: Split into two columns */
+@media (min-width: 768px) {
+  .resp-split-panel {
+    flex-direction: row;
+    gap: 1px;
+  }
+}
+
+/**
+ * Left panel (list/sidebar)
+ * Mobile: Full width (in its own tab)
+ * Desktop: Fixed width (30-40%)
+ */
+.resp-split-left {
+  flex: 0 0 35%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* Allow shrinking below content */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--vecthare-bg-secondary, #fafafa);
+}
+
+/* Mobile: Full width within its tab */
+@media (max-width: 767px) {
+  .resp-split-left {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+}
+
+/**
+ * Right panel (detail/content)
+ * Mobile: Full width (in its own tab)
+ * Desktop: Flex grow
+ */
+.resp-split-right {
+  flex: 1 1 65%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* Allow shrinking below content */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--vecthare-bg-primary, #fff);
+}
+
+/* Mobile: Full width within its tab */
+@media (max-width: 767px) {
+  .resp-split-right {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+}
+
+/* ============================================================================
+   FLEX SCROLL CONTAINMENT
+   ============================================================================ */
+
+/**
+ * Flex child that scrolls without overflowing parent
+ * Essential for nested scrolling prevention
+ * When applied to scrollable containers inside flex parents, use min-height: 0
+ */
+.flex-scroll-child {
+  flex: 1 1 auto;
+  min-height: 0; /* Allow flex container to shrink below content */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ============================================================================
+   TOUCH-FRIENDLY SIZING
+   ============================================================================ */
+
+/**
+ * Touch target minimum (48px)
+ * Apply to buttons, clickable icons, interactive elements on mobile
+ */
+.touch-target-48 {
+  min-width: 48px;
+  min-height: 48px;
+  padding: 8px;
+}
+
+/**
+ * Touch target medium (44px)
+ * Apply to secondary interactive elements
+ */
+.touch-target-44 {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px;
+}
+
+/**
+ * Icon button with consistent sizing
+ * 48px on mobile, 40px on desktop
+ */
+.resp-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--vecthare-text-secondary, #666);
+  cursor: pointer;
+  font-size: 18px;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+.resp-icon-button:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--vecthare-text-primary, #333);
+}
+
+.resp-icon-button.active {
+  color: var(--vecthare-primary, #2563eb);
+}
+
+/* Desktop: Slightly smaller */
+@media (min-width: 768px) {
+  .resp-icon-button {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 6px;
+  }
+}
+
+/* ============================================================================
+   STICKY HEADER & FOOTER
+   ============================================================================ */
+
+/**
+ * Sticky header that stays at top
+ * Prevents content from being trapped beneath
+ */
+.resp-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 99;
+  background: var(--vecthare-bg-primary, #fff);
+  border-bottom: 1px solid var(--vecthare-border, #e5e5e5);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* Mobile: Tighter padding */
+@media (max-width: 767px) {
+  .resp-sticky-header {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+}
+
+/**
+ * Sticky footer
+ * Positioned at bottom, scrollable content above doesn't cover it
+ */
+.resp-sticky-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 99;
+  background: var(--vecthare-bg-secondary, #fafafa);
+  border-top: 1px solid var(--vecthare-border, #e5e5e5);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 767px) {
+  .resp-sticky-footer {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+}
+
+/* ============================================================================
+   SCROLLABLE BODY (Flex-safe)
+   ============================================================================ */
+
+/**
+ * Main scrollable body container within flex layout
+ * Placed between sticky header and footer
+ * MUST use min-height: 0 for flex siblings to scroll properly
+ */
+.resp-flex-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0;
+}
+
+/* ============================================================================
+   TOOLBAR (Search, Filter, Sort)
+   ============================================================================ */
+
+/**
+ * Responsive toolbar container
+ * Stacks vertically on mobile, horizontal on desktop
+ */
+.resp-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--vecthare-bg-secondary, #fafafa);
+  border-bottom: 1px solid var(--vecthare-border, #e5e5e5);
+}
+
+/* Desktop: Horizontal layout */
+@media (min-width: 768px) {
+  .resp-toolbar {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+}
+
+/**
+ * Toolbar search input
+ * Full width on mobile, constrained on desktop
+ */
+.resp-toolbar-search {
+  flex: 1 1 100%;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--vecthare-border, #ddd);
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 200ms ease;
+}
+
+.resp-toolbar-search:focus {
+  outline: none;
+  border-color: var(--vecthare-primary, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Mobile: Increase height for easier tapping */
+@media (max-width: 767px) {
+  .resp-toolbar-search {
+    min-height: 44px;
+  }
+}
+
+/**
+ * Toolbar control group (filters, sorts, buttons)
+ * Horizontal on all sizes; wraps on mobile if multiple
+ */
+.resp-toolbar-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Desktop: Keep in row */
+@media (min-width: 768px) {
+  .resp-toolbar-controls {
+    flex-wrap: nowrap;
+    gap: 12px;
+  }
+}
+
+/**
+ * Select/dropdown in toolbar
+ */
+.resp-toolbar-select {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--vecthare-border, #ddd);
+  border-radius: 4px;
+  font-size: 13px;
+  background: var(--vecthare-bg-primary, #fff);
+  cursor: pointer;
+  transition: border-color 200ms ease;
+}
+
+.resp-toolbar-select:focus {
+  outline: none;
+  border-color: var(--vecthare-primary, #2563eb);
+}
+
+/* Mobile: Larger touch targets */
+@media (max-width: 767px) {
+  .resp-toolbar-select {
+    min-height: 44px;
+    font-size: 14px;
+  }
+}
+
+/* ============================================================================
+   UTILITY HELPERS
+   ============================================================================ */
+
+/**
+ * Hide content on mobile
+ */
+.resp-hide-mobile {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .resp-hide-mobile {
+    display: block;
+  }
+}
+
+/**
+ * Hide content on desktop
+ */
+.resp-hide-desktop {
+  display: block;
+}
+
+@media (min-width: 768px) {
+  .resp-hide-desktop {
+    display: none;
+  }
+}
+
+/**
+ * Show as flex on mobile (overrides display: none)
+ */
+.resp-show-mobile-flex {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .resp-show-mobile-flex {
+    display: flex;
+  }
+}
+
+/**
+ * Show as block on mobile
+ */
+.resp-show-mobile-block {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .resp-show-mobile-block {
+    display: block;
+  }
+}
+
+/**
+ * Prevent horizontal overflow
+ */
+.resp-no-wrap {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+/**
+ * Responsive typography scale
+ */
+.resp-text-sm {
+  font-size: 12px;
+}
+
+.resp-text-base {
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  .resp-text-base {
+    font-size: 15px;
+  }
+}
+
+.resp-text-lg {
+  font-size: 16px;
+}
+
+@media (min-width: 768px) {
+  .resp-text-lg {
+    font-size: 18px;
+  }
+}
+
+/* ============================================================================
+   ACCESSIBILITY
+   ============================================================================ */
+
+/**
+ * Focus visible for keyboard navigation
+ */
+.resp-tab-item:focus-visible,
+.resp-icon-button:focus-visible,
+.resp-toolbar-select:focus-visible {
+  outline: 2px solid var(--vecthare-primary, #2563eb);
+  outline-offset: 2px;
+}
+
+/**
+ * Reduced motion support
+ */
+@media (prefers-reduced-motion: reduce) {
+  .resp-tab-item,
+  .resp-icon-button,
+  .resp-toolbar-search,
+  .resp-toolbar-select {
+    transition: none;
+  }
+}
