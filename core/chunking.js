@@ -142,27 +142,27 @@ const STRATEGIES = {
             }
             else {
                 //TODO: consider change from pair to user-led pairing, where we look for user message and then pair with following AI messages until next user message (with a limit to prevent runaway pairing?)
-            const pair = [messages[i]];
-            i++;
-            while (i < messages.length && !messages[i].is_user && messages[i].isILSSummary) {
-                console.log(`[VectHare Chunking] Found summary message at index ${i}, treating as separate chunk.`);
-                // If we encounter a summary, treat it as its own chunk and skip pairing
-                const text = messages[i].text || messages[i].mes || '';
-                chunks.push({
-                    text,
-                    metadata: {
-                        speaker: '[Summary]',
-                        isUser: false,
-                        messageId: messages[i].index ?? messages[i].id,
-                        messageHashes: [messages[i].hash], // Store individual message hash for deduplication
-                    },
-                });
-                i++; // Move to the next message after the summary
-            }
-            if (i >= messages.length) {
-                break;
-            }
-                pair.push(messages[1]);
+                const pair = [messages[i]];
+                i++;
+                while (i < messages.length && !messages[i].is_user && messages[i].isILSSummary) {
+                    console.log(`[VectHare Chunking] Found summary message at index ${i}, treating as separate chunk.`);
+                    // If we encounter a summary, treat it as its own chunk and skip pairing
+                    const text = messages[i].text || messages[i].mes || '';
+                    chunks.push({
+                        text,
+                        metadata: {
+                            speaker: '[Summary]',
+                            isUser: false,
+                            messageId: messages[i].index ?? messages[i].id,
+                            messageHashes: [messages[i].hash], // Store individual message hash for deduplication
+                        },
+                    });
+                    i++; // Move to the next message after the summary
+                }
+                if (i >= messages.length) {
+                    break;
+                }
+                pair.push(messages[i]);
 
             // Combine texts with speaker labels
             const combinedText = pair.map(m => {
