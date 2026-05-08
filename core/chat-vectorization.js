@@ -15,7 +15,7 @@ import { waitUntilCondition, onlyUnique } from '../../../../utils.js';
 import { isUnitStrategy } from './chunking.js';
 import { extractBM25Keywords, extractChatKeywords } from './keyword-boost.js';
 import { cleanText } from './text-cleaning.js';
-import { getStringHash, enrichVectorItems, expandILSMessage } from './shared-vectorization.js';
+import { getStringHash, getTextWithoutAttachments, enrichVectorItems, expandILSMessage } from './shared-vectorization.js';
 import { getDefaultDecaySettings } from './temporal-decay.js';
 import {
     getSavedHashes,
@@ -82,17 +82,6 @@ export function getLegacyChatCollectionId(chatId) {
 
 // Re-export getAllChatCollectionIds with adapted return format for backwards compat
 export { getAllChatCollectionIds, parseCollectionId, parseRegistryKey, getStringHash };
-
-/**
- * Gets message text without file attachments
- * Matches behavior of ST vectors extension for hash compatibility
- * @param {object} message Chat message object
- * @returns {string} Message text without attachment prefix
- */
-function getTextWithoutAttachments(message) {
-    const fileLength = message?.extra?.fileLength || 0;
-    return String(message?.mes || '').substring(fileLength).trim();
-}
 
 /**
  * Prepares items for insertion by adding source metadata
@@ -1103,7 +1092,7 @@ function deduplicateChunks(chunks, chat, settings, debugData) {
     recentMessages.forEach((msg, idx) => {
         if (msg.mes) {
             const cleanedText = substituteParams(getTextWithoutAttachments(msg));
-            const hash = getStringHash(cleanedText);
+            const hash = getStringHash(cleanText(cleanedText));
             currentChatHashes.add(hash);
 
             // Store sample for debugging (first occurrence only)
