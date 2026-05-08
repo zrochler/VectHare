@@ -1601,7 +1601,7 @@ export async function rearrangeChat(chat, settings, type) {
                     chunk.originalScore = oldScore;
                     keywordMatchCount++;
 
-                    const summaryBoost = chunkKeyWordWeights.includes('summary') ? (1.0 - chunkKeyWordWeights.summary) : 0.0;
+                    const summaryBoost = chunkKeywords.includes('summary') ? (1.0 - chunkKeyWordWeights.summary) : 0.0;
 
                     const boost = matchedKeywords.reduce((sum, kw) => sum + (1 - chunkKeyWordWeights[kw]), summaryBoost);
                     chunk.score = oldScore * boost;
