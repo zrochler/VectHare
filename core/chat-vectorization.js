@@ -1595,14 +1595,15 @@ export async function rearrangeChat(chat, settings, type) {
                 const matchedKeywords = queryKeywordTexts.filter(qk => chunkKeywords.includes(qk));
 
                 if (matchedKeywords.length > 0) {
-                    // Chunk matches query keywords - boost to perfect hit
                     const oldScore = chunk.score;
                     chunk.keywordMatched = true;
                     chunk.matchedQueryKeywords = matchedKeywords;
                     chunk.originalScore = oldScore;
                     keywordMatchCount++;
 
-                    const boost = matchedKeywords.reduce((mult, kw) => mult * chunkKeyWordWeights[kw], 1.0);
+                    const summaryBoost = chunkKeyWordWeights.includes('summary') ? (1.0 - chunkKeyWordWeights.summary) : 0.0;
+
+                    const boost = matchedKeywords.reduce((sum, kw) => sum + (1 - chunkKeyWordWeights[kw]), summaryBoost);
                     chunk.score = oldScore * boost;
 
                     addTrace(debugData, 'keyword_boost', `Chunk boosted by ${matchedKeywords.length} keyword(s)`, {
