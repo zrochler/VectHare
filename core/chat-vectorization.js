@@ -1112,7 +1112,7 @@ function deduplicateChunks(chunks, chat, settings, debugData) {
         }
     });
 
-    console.log(`[VectHare Dedup] Built hash set with ${currentChatHashes.size} unique message hashes from recent context`);
+    console.log(`[VectHare Dedup] Built hash set with ${currentChatHashes.size} unique message hashes from recent context: [${[...currentChatHashes].slice(0, 5).join(', ')}${currentChatHashes.size > 5 ? ', ...' : ''}]`);
 
     const toInject = [];
     const skipped = [];
@@ -1128,24 +1128,46 @@ function deduplicateChunks(chunks, chat, settings, debugData) {
         let matchedHash = null;
         let matchedMsg = null;
 
-        if (isGroupedStrategy) {
-            // Check if ANY message hash in the group exists in current chat (conservative approach)
-            for (const msgHash of messageHashes) {
-                if (currentChatHashes.has(msgHash)) {
-                    isInChat = true;
-                    matchedHash = msgHash;
-                    matchedMsg = chatHashMap.get(msgHash);
-                    break;
-                }
-            }
+        isInChat = currentChatHashes.has(chunk.hash);
+        if (isInChat) {
+            matchedHash = chunk.hash;
+            matchedMsg = chatHashMap.get(chunk.hash);
         } else {
-            // For ungrouped strategies, check the chunk hash directly
-            isInChat = currentChatHashes.has(chunk.hash);
-            if (isInChat) {
-                matchedHash = chunk.hash;
-                matchedMsg = chatHashMap.get(chunk.hash);
+            for (const msgHash of messageHashes) {
+            if (currentChatHashes.has(msgHash)) {
+                isInChat = true;
+                matchedHash = msgHash;
+                matchedMsg = chatHashMap.get(msgHash);
+                break;
             }
         }
+
+        // if (isGroupedStrategy) {
+        //     // Check if ANY message hash in the group exists in current chat (conservative approach)
+        //     for (const msgHash of messageHashes) {
+        //         if (currentChatHashes.has(msgHash)) {
+        //             isInChat = true;
+        //             matchedHash = msgHash;
+        //             matchedMsg = chatHashMap.get(msgHash);
+        //             break;
+        //         }
+        //     }
+        // } else {
+        //     // For ungrouped strategies, check the chunk hash directly
+        //     isInChat = currentChatHashes.has(chunk.hash);
+        //     if (isInChat) {
+        //         matchedHash = chunk.hash;
+        //         matchedMsg = chatHashMap.get(chunk.hash);
+        //     } else {
+        //         for (const msgHash of messageHashes) {
+        //         if (currentChatHashes.has(msgHash)) {
+        //             isInChat = true;
+        //             matchedHash = msgHash;
+        //             matchedMsg = chatHashMap.get(msgHash);
+        //             break;
+        //         }
+        //     }
+        // }
 
         if (isInChat) {
             console.debug(`[VectHare Dedup] ❌ SKIPPING chunk (${isGroupedStrategy ? 'grouped' : 'ungrouped'} strategy)`);
