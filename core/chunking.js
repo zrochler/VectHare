@@ -27,6 +27,7 @@
  */
 
 import { DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP } from './constants.js';
+import { getStringHash } from './shared-vectorization.js';
 
 /**
  * Main entry point - chunks text using specified strategy
@@ -177,7 +178,7 @@ const STRATEGIES = {
                 metadata: {
                     strategy: 'conversation_turns',
                     messageIds: pair.map(m => m.index ?? m.id),
-                    messageHashes: pair.map(m => m.hash), // Store individual hashes for injection lookup and deduplication
+                    messageHashes: pair.map(m => m.hash ?? getStringHash(m.text || m.mes || '')), // Store individual hashes for injection lookup and deduplication
                     startIndex: pair[0].index ?? pair[0].id,
                     endIndex: pair[pair.length - 1].index ?? pair[pair.length - 1].id,
                 },
