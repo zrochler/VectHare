@@ -681,6 +681,8 @@ function applyThresholdFilter(chunks, threshold, debugData) {
  * @returns {object[]} Chunks with decay applied
  */
 function applyTemporalDecayStage(chunks, chat, settings, threshold, debugData) {
+    console.log(`[VectHare Decay Debug] Applying decay to ${chunks.length} chunks`);
+
     if (!settings.temporal_decay || !settings.temporal_decay.enabled) {
         addTrace(debugData, 'decay', 'Temporal decay skipped (disabled)', { enabled: false });
         chunks.forEach(chunk => {
