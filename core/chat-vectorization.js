@@ -1698,6 +1698,7 @@ export async function rearrangeChat(chat, settings, type) {
         }
 
         // === STAGE 6: Temporal decay ===
+        const threshold = settings.score_threshold || 0;
         chunks = applyTemporalDecayStage(chunks, chat, settings, threshold, debugData);
         debugData.stages.afterDecay = [...chunks];
         debugData.stats.afterDecay = chunks.length;
@@ -1715,7 +1716,6 @@ export async function rearrangeChat(chat, settings, type) {
 
 
         // === STAGE 8: Threshold filter ===
-        const threshold = settings.score_threshold || 0;
         chunks = applyThresholdFilter(chunks, threshold, debugData);
         debugData.stages.afterThreshold = [...chunks];
 
