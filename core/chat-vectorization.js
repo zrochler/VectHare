@@ -1134,11 +1134,12 @@ function deduplicateChunks(chunks, chat, settings, debugData) {
             matchedMsg = chatHashMap.get(chunk.hash);
         } else {
             for (const msgHash of messageHashes) {
-            if (currentChatHashes.has(msgHash)) {
-                isInChat = true;
-                matchedHash = msgHash;
-                matchedMsg = chatHashMap.get(msgHash);
-                break;
+                if (currentChatHashes.has(msgHash)) {
+                    isInChat = true;
+                    matchedHash = msgHash;
+                    matchedMsg = chatHashMap.get(msgHash);
+                    break;
+                }
             }
         }
 
