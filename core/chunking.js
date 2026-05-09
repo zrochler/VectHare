@@ -122,6 +122,7 @@ const STRATEGIES = {
         const chunks = [];
         let i = 0;
         while (i < messages.length) {
+            console.log(`[VectHare Chunking] Processing message at index ${i} with hash ${messages[i].hash}`);
         // for (let i = 0; i < messages.length; i += 2) {
         // "extra":{"ILS_Data":{"OriginalMessages":[...
         // handles ILS Summary messages, which are standalone and should not be paired
