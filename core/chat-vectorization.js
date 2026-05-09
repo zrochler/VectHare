@@ -1607,7 +1607,7 @@ export async function rearrangeChat(chat, settings, type) {
                     const boost = matchedKeywords.reduce((mult, kw) => mult * chunkKeyWordWeights[kw], summaryBoost);
                     chunk.score = oldScore * boost;
 
-                    addTrace(debugData, 'keyword_boost', `Chunk boosted by ${matchedKeywords.length} keyword(s)`, {
+                    addTrace(debugData, 'keyword_boost', `Chunk boosted ${boost} by ${matchedKeywords.length} keyword(s)`, {
                         hash: chunk.hash,
                         matchedKeywords,
                         newScore: chunk.score,
@@ -1694,25 +1694,27 @@ export async function rearrangeChat(chat, settings, type) {
             addTrace(debugData, 'rerank', 'Reranking complete', { rerankedCount: chunks.length });
         }
 
-        // === STAGE 6: Threshold filter ===
-        const threshold = settings.score_threshold || 0;
-        chunks = applyThresholdFilter(chunks, threshold, debugData);
-        debugData.stages.afterThreshold = [...chunks];
-
-        // === STAGE 7: Temporal decay ===
+        // === STAGE 6: Temporal decay ===
         chunks = applyTemporalDecayStage(chunks, chat, settings, threshold, debugData);
         debugData.stages.afterDecay = [...chunks];
         debugData.stats.afterDecay = chunks.length;
 
-        // === STAGE 8: Chunk conditions ===
+        // === STAGE 7: Chunk conditions ===
         chunks = await applyConditionsStage(chunks, chat, settings, debugData);
         debugData.stages.afterConditions = [...chunks];
         debugData.stats.afterConditions = chunks.length;
 
-        // === STAGE 8.5: Chunk Groups and Links ===
+        // === STAGE 7.5: Chunk Groups and Links ===
         chunks = await applyGroupsAndLinksStage(chunks, activeCollections, settings, debugData);
         debugData.stages.afterGroups = [...chunks];
         debugData.stats.afterGroups = chunks.length;
+
+
+
+        // === STAGE 8: Threshold filter ===
+        const threshold = settings.score_threshold || 0;
+        chunks = applyThresholdFilter(chunks, threshold, debugData);
+        debugData.stages.afterThreshold = [...chunks];
 
         // Store for legacy visualizer
         window.VectHare_LastSearch = {
