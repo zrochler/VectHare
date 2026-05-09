@@ -1607,11 +1607,12 @@ export async function rearrangeChat(chat, settings, type) {
                     const boost = matchedKeywords.reduce((mult, kw) => mult * chunkKeyWordWeights[kw], summaryBoost);
                     chunk.score = oldScore * boost;
 
-                    addTrace(debugData, 'keyword_boost', `Chunk boosted ${boost} by ${matchedKeywords.length} keyword(s)`, {
+                    addTrace(debugData, 'keyword_boost', `Chunk boosted by ${matchedKeywords.length} keyword(s)`, {
                         hash: chunk.hash,
                         matchedKeywords,
                         newScore: chunk.score,
-                        oldScore
+                        oldScore,
+                        boostMultiplier: boost
                     });
                 }
             }
