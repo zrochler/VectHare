@@ -1484,6 +1484,12 @@ function injectChunksIntoPrompt(chunksToInject, settings, debugData) {
 export async function rearrangeChat(chat, settings, type) {
     console.log(`🐰 VectHare: rearrangeChat called (type: ${type}, chat length: ${chat?.length || 0})`);
 
+
+
+        for (const msg of chat) {
+            console.log(`[VectHare Chat] message: ${msg}`);
+        }
+
     try {
         // === EARLY EXITS ===
         if (type === 'quiet') {
@@ -1528,10 +1534,6 @@ export async function rearrangeChat(chat, settings, type) {
             console.log(`VectHare: Will query ${collectionsToQuery.length} collections:`, collectionsToQuery);
         } else {
             console.log('VectHare: No regular collections enabled, but World Info is enabled - will query lorebooks only');
-        }
-
-        for (const msg of chat) {
-            console.debug(`[VectHare Chat] message: ${msg}`);
         }
 
         // === STAGE 2: Build search query ===
