@@ -142,6 +142,21 @@ const STRATEGIES = {
                 });
                 i += 1; // Move to the next message after the summary
             }
+            else if (!messages[i].is_user) {
+                // If we encounter an AI message without a preceding user message, treat it as its own chunk
+                console.log(`[VectHare Chunking] Found AI message without preceding user message at index ${i}, treating as separate chunk.`);
+                const text = messages[i].text || messages[i].mes || '';
+                chunks.push({
+                    text,
+                    metadata: {
+                        speaker: messages[i].name || 'AI',
+                        isUser: false,
+                        messageId: messages[i].index ?? messages[i].id,
+                        messageHashes: [messages[i].hash ?? getStringHash(messages[i].text || messages[i].mes || '')], // Store individual message hash for deduplication
+                    },
+                });
+                i += 1; // Move to the next message
+            }
             else {
                 //TODO: consider change from pair to user-led pairing, where we look for user message and then pair with following AI messages until next user message (with a limit to prevent runaway pairing?)
                 const pair = [messages[i]];
