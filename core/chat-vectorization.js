@@ -1112,8 +1112,6 @@ function deduplicateChunks(chunks, chat, settings, debugData) {
         }
     });
 
-    console.log(`[VectHare Dedup] Built hash set with ${currentChatHashes.size} unique message hashes from recent context: [${[...currentChatHashes].slice(0, 5).join(', ')}${currentChatHashes.size > 5 ? ', ...' : ''}]`);
-
     const toInject = [];
     const skipped = [];
 
@@ -1121,7 +1119,6 @@ function deduplicateChunks(chunks, chat, settings, debugData) {
         // For grouped strategies (conversation_turns, message_batch), check if ANY constituent message is in chat
         // For ungrouped strategies (per_message), just check the chunk hash
         const messageHashes = chunk.metadata?.messageHashes || [];
-        console.log(`[VectHare Dedup] Processing chunk ${chunk.hash} with message hashes [${messageHashes.join(', ')}]`);
         const isGroupedStrategy = messageHashes.length > 0;
         
         let isInChat = false;
