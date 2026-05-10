@@ -486,7 +486,7 @@ function prepareChatContent(rawContent, settings) {
     }
 
     // Filter out system messages and empty messages
-    const validMessages = messages.filter(m => m.mes && !m.is_system);
+    const validMessages = messages.filter(m => m.mes);
 
     // Apply text cleaning to messages
     const cleanedMessages = cleanMessages(validMessages);
