@@ -1530,6 +1530,10 @@ export async function rearrangeChat(chat, settings, type) {
             console.log('VectHare: No regular collections enabled, but World Info is enabled - will query lorebooks only');
         }
 
+        for (const msg of chat) {
+            console.debug(`[VectHare Chat] message: ${msg}`);
+        }
+
         // === STAGE 2: Build search query ===
         const queryText = buildSearchQuery(chat, settings);
         if (queryText.length === 0) {
