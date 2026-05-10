@@ -1485,11 +1485,6 @@ export async function rearrangeChat(chat, settings, type) {
     console.log(`🐰 VectHare: rearrangeChat called (type: ${type}, chat length: ${chat?.length || 0})`);
 
 
-
-        for (const msg of chat) {
-            console.log(`[VectHare Chat] message: ${msg}`);
-        }
-
     try {
         // === EARLY EXITS ===
         if (type === 'quiet') {
