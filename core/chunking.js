@@ -122,84 +122,76 @@ const STRATEGIES = {
 
         const chunks = [];
         let i = 0;
-        while (i < messages.length) {
-        // for (let i = 0; i < messages.length; i += 2) {
-        // "extra":{"ILS_Data":{"OriginalMessages":[...
-        // handles ILS Summary messages, which are standalone and should not be paired
-        if(!messages[i].is_user && messages[i].name == 'Summary') {
-                console.log(`[VectHare Chunking] Found summary message at index ${i}, treating as separate chunk.`);
-                // If we encounter a summary, treat it as its own chunk and skip pairing
-                const text = messages[i].text || messages[i].mes || '';
-                chunks.push({
-                    text,
-                    metadata: {
-                        speaker: '[Summary]',
-                        isUser: false,
-                        messageId: messages[i].index ?? messages[i].id,
-                        messageHashes: [messages[i].hash], // Store individual message hash for deduplication
-                    },
-                });
-                i += 1; // Move to the next message after the summary
-            }
-            else if (!messages[i].is_user) {
-                // If we encounter an AI message without a preceding user message, treat it as its own chunk
-                console.log(`[VectHare Chunking] Found AI message without preceding user message at index ${i}, treating as separate chunk.`);
-                const text = messages[i].text || messages[i].mes || '';
-                chunks.push({
-                    text,
-                    metadata: {
-                        speaker: messages[i].name || 'AI',
-                        isUser: false,
-                        messageId: messages[i].index ?? messages[i].id,
-                        messageHashes: [messages[i].hash ?? getStringHash(messages[i].text || messages[i].mes || '')], // Store individual message hash for deduplication
-                    },
-                });
-                i += 1; // Move to the next message
-            }
-            else {
-                //TODO: consider change from pair to user-led pairing, where we look for user message and then pair with following AI messages until next user message (with a limit to prevent runaway pairing?)
-                const pair = [messages[i]];
-                i++;
-                while (i < messages.length && !messages[i].is_user && messages[i].isILSSummary) {
-                    console.log(`[VectHare Chunking] Found summary message at index ${i}, treating as separate chunk.`);
-                    // If we encounter a summary, treat it as its own chunk and skip pairing
-                    const text = messages[i].text || messages[i].mes || '';
-                    chunks.push({
-                        text,
-                        metadata: {
-                            speaker: '[Summary]',
-                            isUser: false,
-                            messageId: messages[i].index ?? messages[i].id,
-                            messageHashes: [messages[i].hash], // Store individual message hash for deduplication
-                        },
-                    });
-                    i++; // Move to the next message after the summary
-                }
-                if (i >= messages.length) {
-                    break;
-                }
-                pair.push(messages[i]);
 
-            // Combine texts with speaker labels
-            const combinedText = pair.map(m => {
+        const getMessageHash = (msg) => msg.hash ?? getStringHash(msg.text || msg.mes || '');
+
+        const createStandaloneChunk = (msg, speaker) => ({
+            text: msg.text || msg.mes || '',
+            metadata: {
+                speaker,
+                isUser: false,
+                messageId: msg.index ?? msg.id,
+                messageHashes: [getMessageHash(msg)],
+            },
+        });
+
+        const createConversationChunk = (group) => {
+            const combinedText = group.map(m => {
                 const role = m.is_user ? 'User' : (m.name || 'Character');
                 const text = m.text || m.mes || '';
                 return `[${role}]: ${text}`;
             }).join('\n\n');
 
-            chunks.push({
+            return {
                 text: combinedText,
                 metadata: {
                     strategy: 'conversation_turns',
-                    messageIds: pair.map(m => m.index ?? m.id),
-                    messageHashes: pair.map(m => m.hash ?? getStringHash(m.text || m.mes || '')), // Store individual hashes for injection lookup and deduplication
-                    startIndex: pair[0].index ?? pair[0].id,
-                    endIndex: pair[pair.length - 1].index ?? pair[pair.length - 1].id,
+                    messageIds: group.map(m => m.index ?? m.id),
+                    messageHashes: group.map(getMessageHash),
+                    startIndex: group[0].index ?? group[0].id,
+                    endIndex: group[group.length - 1].index ?? group[group.length - 1].id,
                 },
-            });
-            i++;
+            };
+        };
+
+        while (i < messages.length) {
+            const message = messages[i];
+
+            if (!message.is_user && (message.name === 'Summary' || message.isILSSummary)) {
+                chunks.push(createStandaloneChunk(message, '[Summary]'));
+                i += 1;
+                continue;
+            }
+
+            // if (!message.is_user) {
+            //     chunks.push(createStandaloneChunk(message, message.name || 'AI'));
+            //     i += 1;
+            //     continue;
+            // }
+
+            const group = [message];
+            i += 1;
+            let isFullGroup = false;
+
+            while (i < messages.length && !messages[i].is_user) {
+                if (!messages[i].is_user && (messages[i].name === 'Summary' || messages[i].isILSSummary)) {
+                    chunks.push(createStandaloneChunk(messages[i], '[Summary]'));
+                    i += 1;
+                    continue;
+                }
+
+                group.push(messages[i]);
+                i += 1;
+                if (group.length > 5) break;
+            }
+
+            // User message followed by at least one AI message = conversation turn
+            // Max group size of 5 to prevent runaway grouping if user deletes their message or if there's a long AI monologue without user input
+            if (isFullGroup || (i >= messages.length && messages[i].is_user && group.length > 1)) {
+                chunks.push(createConversationChunk(group));
+            }
         }
-        }
+
         return chunks;
     },
 
