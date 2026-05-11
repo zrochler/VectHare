@@ -187,7 +187,7 @@ const STRATEGIES = {
 
             // User message followed by at least one AI message = conversation turn
             // Max group size of 5 to prevent runaway grouping if user deletes their message or if there's a long AI monologue without user input
-            if (isFullGroup || (i >= messages.length && messages[i].is_user && group.length > 1)) {
+            if (isFullGroup || (i < messages.length && messages[i].is_user && group.length > 1)) {
                 chunks.push(createConversationChunk(group));
             }
         }
