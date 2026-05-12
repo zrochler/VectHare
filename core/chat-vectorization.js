@@ -713,7 +713,7 @@ function applyTemporalDecayStage(chunks, chat, settings, threshold, debugData) {
         metadata: {
             ...chunk.metadata,
             // Ensure messageId is present (fallback to chunk.index if not in metadata)
-            messageId: chunk.metadata?.messageId ?? chunk.index,
+            messageId: chunk.metadata?.messageId ?? chunk.metadata?.startIndex ?? chunk.index,
             // Ensure source is set to 'chat' if not already specified
             source: chunk.metadata?.source || 'chat'
         },
@@ -1628,6 +1628,7 @@ export async function rearrangeChat(chat, settings, type) {
                     keywordMatchCount++;
 
                     const summaryBoost = chunkKeywords.includes('summary') ? (chunkKeyWordWeights.summary || 1.0) : 1.0;
+                
 
                     const boost = matchedKeywords.reduce((mult, kw) => mult * chunkKeyWordWeights[kw], summaryBoost);
                     chunk.score = oldScore * boost;
