@@ -146,6 +146,7 @@ const STRATEGIES = {
                 text: combinedText,
                 metadata: {
                     strategy: 'conversation_turns',
+                    messageId: group[0].index ?? group[0].id,
                     messageIds: group.map(m => m.index ?? m.id),
                     messageHashes: group.map(getMessageHash),
                     startIndex: group[0].index ?? group[0].id,
