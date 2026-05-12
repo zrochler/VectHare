@@ -1195,6 +1195,11 @@ function deduplicateChunks(chunks, chat, settings, debugData) {
             console.debug(`[VectHare Dedup]  Text: "${chunk.text?.substring(0, 80)}..."`);
 
             toInject.push(chunk);
+            // sanity check to make sure chunks aren't injected multiple times due to hash mismatches - track in Map for debugging
+            chatHashMap.set(chunk.hash, {
+                index: 'N/A',
+                preview: chunk.text?.substring(0, 80) || '',
+            });
             recordChunkFate(debugData, chunk.hash, 'injection', 'passed',
                 'Not in current context - will inject',
                 { score: chunk.score, collectionId: chunk.collectionId, isGroupedStrategy }
